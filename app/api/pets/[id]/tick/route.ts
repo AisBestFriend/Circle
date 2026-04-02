@@ -9,11 +9,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session) {
+    console.error('[tick] Unauthorized: no session')
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const { id } = await params
 
-  const { data: pet } = await supabaseAdmin
+  const { data: pet, error: fetchError } = await supabaseAdmin
     .from('pets')
     .select('*')
     .eq('id', id)
@@ -21,9 +24,17 @@ export async function POST(
     .eq('is_alive', true)
     .single()
 
-  if (!pet) return NextResponse.json({ error: 'Pet not found' }, { status: 404 })
+  if (fetchError) {
+    console.error('[tick] Pet fetch error:', fetchError)
+    return NextResponse.json({ error: fetchError.message }, { status: 500 })
+  }
+  if (!pet) {
+    console.error('[tick] Pet not found:', id, 'user:', session.user.id)
+    return NextResponse.json({ error: 'Pet not found' }, { status: 404 })
+  }
 
   const updates = calcTick(pet)
+  console.log('[tick] pet:', id, 'stage:', pet.stage, '→', updates.stage, 'last_tick_at:', updates.last_tick_at)
 
   const { data: updated, error } = await supabaseAdmin
     .from('pets')
@@ -32,7 +43,10 @@ export async function POST(
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[tick] Update error:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   return NextResponse.json({ pet: updated })
 }

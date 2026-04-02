@@ -117,10 +117,17 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
 
   useEffect(() => {
     if (!initialPet) return
-    fetch(`/api/pets/${initialPet.id}/tick`, { method: 'POST' })
-      .then(res => res.json())
-      .then(data => { if (data.pet) setPet(data.pet) })
-      .catch(() => {})
+    fetch(`/api/pets/${initialPet.id}/tick`, { method: 'POST', credentials: 'include' })
+      .then(async res => {
+        const data = await res.json()
+        if (!res.ok) {
+          console.error('[tick] API error', res.status, data)
+          setMessage(`[tick 오류 ${res.status}] ${data.error ?? '알 수 없는 오류'}`)
+          return
+        }
+        if (data.pet) setPet(data.pet)
+      })
+      .catch(err => console.error('[tick] Fetch failed:', err))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

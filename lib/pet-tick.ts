@@ -1,0 +1,86 @@
+import type { Pet } from '@/types/game'
+
+export interface TickResult {
+  hunger: number
+  happiness: number
+  energy: number
+  stage: string
+  stage_entered_at: string
+  age_days: number
+  final_choice_required: boolean
+  last_tick_at: string
+  ultimate_at?: string | null
+  elder_at?: string | null
+}
+
+export function calcTick(pet: Pet & { last_tick_at?: string | null; ultimate_at?: string | null; elder_at?: string | null }): TickResult {
+  const now = new Date()
+  const lastTick = pet.last_tick_at ? new Date(pet.last_tick_at) : new Date(pet.born_at)
+  const elapsedSeconds = (now.getTime() - lastTick.getTime()) / 1000
+  const hours = elapsedSeconds / 3600
+
+  // Stat decay
+  const hunger = Math.max(0, Math.round((pet.hunger - 5 * hours) * 100) / 100)
+  const happiness = Math.max(0, Math.round((pet.happiness - 3 * hours) * 100) / 100)
+  const energy = Math.max(0, Math.round((pet.energy - 4 * hours) * 100) / 100)
+
+  // Growth check
+  let stage = pet.stage
+  let stage_entered_at = pet.stage_entered_at
+  let ultimate_at = pet.ultimate_at ?? null
+  let elder_at = pet.elder_at ?? null
+  let age_days = pet.age_days
+  let final_choice_required = pet.final_choice_required
+
+  const stageEnteredAt = new Date(pet.stage_entered_at)
+  const elapsedFromStage = (now.getTime() - stageEnteredAt.getTime()) / 1000
+
+  if (stage === 'egg' && elapsedFromStage >= 600) {
+    stage = 'baby'
+    stage_entered_at = now.toISOString()
+  } else if (stage === 'baby' && elapsedFromStage >= 172800) {
+    const avg = (hunger + happiness + energy) / 3
+    if (avg >= 60) {
+      stage = 'teen'
+      stage_entered_at = now.toISOString()
+    }
+  } else if (stage === 'teen' && elapsedFromStage >= 259200) {
+    const avg = (hunger + happiness + energy) / 3
+    if (avg >= 70) {
+      stage = 'adult'
+      stage_entered_at = now.toISOString()
+    }
+  }
+
+  // Ultimate → Elder (3 days after ultimate_at)
+  if (stage === 'ultimate' && ultimate_at) {
+    const elapsedFromUltimate = (now.getTime() - new Date(ultimate_at).getTime()) / 1000
+    if (elapsedFromUltimate >= 259200) {
+      stage = 'elder'
+      stage_entered_at = now.toISOString()
+      elder_at = now.toISOString()
+      age_days = 0
+    }
+  }
+
+  // Elder age_days calculation
+  if (stage === 'elder' && elder_at) {
+    age_days = Math.floor((now.getTime() - new Date(elder_at).getTime()) / 86400000)
+    if (age_days >= 10) {
+      final_choice_required = true
+    }
+  }
+
+  return {
+    hunger,
+    happiness,
+    energy,
+    stage,
+    stage_entered_at,
+    age_days,
+    final_choice_required,
+    last_tick_at: now.toISOString(),
+    ultimate_at,
+    elder_at,
+  }
+}

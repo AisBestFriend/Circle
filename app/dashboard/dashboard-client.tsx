@@ -87,7 +87,8 @@ function GrowthTimer({ pet }: { pet: Pet }) {
   }
 
   if (pet.stage === 'ultimate') {
-    const remaining = Math.floor((new Date(pet.stage_entered_at).getTime() + 259200_000 - now) / 1000)
+    if (!pet.ultimate_at) return null
+    const remaining = Math.floor((new Date(pet.ultimate_at).getTime() + 259200_000 - now) / 1000)
     return (
       <p className="text-yellow-500 text-xs font-mono">
         {remaining > 0 ? `노년기까지: ${formatDuration(remaining)}` : '🎉 노년기 전환 준비!'}
@@ -96,7 +97,9 @@ function GrowthTimer({ pet }: { pet: Pet }) {
   }
 
   if (pet.stage === 'elder') {
-    const daysLeft = Math.max(0, 10 - pet.age_days)
+    const elderAt = pet.elder_at ? new Date(pet.elder_at).getTime() : now
+    const ageDays = Math.floor((now - elderAt) / 86400000)
+    const daysLeft = Math.max(0, 10 - ageDays)
     return (
       <p className="text-yellow-500 text-xs font-mono">
         최종 선택까지 D-{daysLeft}일
@@ -111,6 +114,15 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
   const [pet, setPet] = useState<Pet | null>(initialPet)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (!initialPet) return
+    fetch(`/api/pets/${initialPet.id}/tick`, { method: 'POST' })
+      .then(res => res.json())
+      .then(data => { if (data.pet) setPet(data.pet) })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function callPetAction(action: string) {
     if (!pet || actionLoading) return

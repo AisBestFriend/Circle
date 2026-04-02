@@ -21,6 +21,9 @@ export interface Pet {
   born_at: string
   stage_entered_at: string
   last_fed_at: string
+  last_tick_at: string | null
+  ultimate_at: string | null
+  elder_at: string | null
   final_choice_required: boolean
 }
 

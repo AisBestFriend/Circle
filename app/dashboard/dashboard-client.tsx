@@ -1,14 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Session } from 'next-auth'
 import { signOut } from 'next-auth/react'
 import Link from 'next/link'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Pet, EVOLUTION_TRAITS } from '@/types/game'
 import { PixelPet } from '@/components/pixel-pet'
 import { StatBar } from '@/components/stat-bar'
 import { CreatePetForm } from './create-pet-form'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { BattleResultModal } from '@/components/battle-result-modal'
+import { generateBattleStory } from '@/lib/battle-story'
 
 interface RelationshipWithPet {
   id: string
@@ -181,11 +184,126 @@ function EvolutionGauge({ pet }: { pet: Pet }) {
   )
 }
 
+// ── 애니메이션 오버레이 컴포넌트들 ──
+
+function FloatingHearts() {
+  return (
+    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+      {[0, 1, 2, 3].map(i => (
+        <motion.span
+          key={i}
+          className="absolute text-xl"
+          initial={{ opacity: 1, y: 0, x: (i - 1.5) * 22 }}
+          animate={{ opacity: 0, y: -70, x: (i - 1.5) * 35 }}
+          transition={{ duration: 1.2, delay: i * 0.15 }}
+        >
+          💖
+        </motion.span>
+      ))}
+    </div>
+  )
+}
+
+function SleepZzz() {
+  return (
+    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+      {[0, 1, 2].map(i => (
+        <motion.span
+          key={i}
+          className="absolute font-bold text-cyan-300 font-mono"
+          style={{ fontSize: `${14 + i * 5}px` }}
+          initial={{ opacity: 0, y: 10, x: 18 + i * 14 }}
+          animate={{ opacity: [0, 1, 1, 0], y: -30 - i * 18 }}
+          transition={{ duration: 1.6, delay: i * 0.45 }}
+        >
+          Z
+        </motion.span>
+      ))}
+    </div>
+  )
+}
+
+function MeditationRings() {
+  return (
+    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+      {[0, 1, 2].map(i => (
+        <motion.div
+          key={i}
+          className="absolute rounded-full border-2 border-blue-400"
+          style={{ width: 64, height: 64 }}
+          initial={{ opacity: 0.9, scale: 0.4 }}
+          animate={{ opacity: 0, scale: 2.8 }}
+          transition={{ duration: 1.6, delay: i * 0.45, ease: 'easeOut' }}
+        />
+      ))}
+    </div>
+  )
+}
+
+function FlyingFood() {
+  return (
+    <motion.div
+      className="absolute pointer-events-none text-2xl"
+      initial={{ opacity: 1, y: 40, x: -50, scale: 0.6 }}
+      animate={{ opacity: [1, 1, 0], y: 0, x: 0, scale: [0.6, 1.3, 1] }}
+      transition={{ duration: 0.7 }}
+    >
+      🍖
+    </motion.div>
+  )
+}
+
+function StrengthPopup() {
+  return (
+    <motion.div
+      className="absolute top-2 pointer-events-none"
+      initial={{ opacity: 0, scale: 0.3, y: 0 }}
+      animate={{ opacity: [0, 1, 1, 0], scale: [0.3, 1.4, 1.2, 0.8], y: [0, -15] }}
+      transition={{ duration: 1.0 }}
+    >
+      <span className="text-4xl">💪</span>
+    </motion.div>
+  )
+}
+
+function WalkFootprints() {
+  return (
+    <div className="absolute bottom-1 w-full pointer-events-none flex justify-around px-2">
+      {[0, 1, 2, 3].map(i => (
+        <motion.span
+          key={i}
+          className="text-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 1, 0] }}
+          transition={{ duration: 0.5, delay: i * 0.3 }}
+        >
+          👣
+        </motion.span>
+      ))}
+    </div>
+  )
+}
+
 export function DashboardClient({ session, initialPet, initialRelationships = [], recentEvents = [] }: DashboardClientProps) {
   const [pet, setPet] = useState<Pet | null>(initialPet)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [showFightSelect, setShowFightSelect] = useState(false)
+  const [activeAnimation, setActiveAnimation] = useState<string | null>(null)
+  const [battleResult, setBattleResult] = useState<{
+    story: string
+    won: boolean
+    statChanges: { label: string; change: number }[]
+  } | null>(null)
+  const [showEvolveEffect, setShowEvolveEffect] = useState(false)
+  const [evolveText, setEvolveText] = useState('')
+  const [eventPopup, setEventPopup] = useState<string | null>(null)
+  const prevStageRef = useRef<string>(initialPet?.stage ?? 'egg')
+
+  function triggerAnimation(name: string, duration = 1500) {
+    setActiveAnimation(name)
+    setTimeout(() => setActiveAnimation(null), duration)
+  }
 
   useEffect(() => {
     if (!initialPet) return
@@ -197,8 +315,20 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
           setMessage(`[tick 오류 ${res.status}] ${data.error ?? '알 수 없는 오류'}`)
           return
         }
-        if (data.pet) setPet(data.pet)
-        if (data.event) setMessage(data.event)
+        if (data.pet) {
+          if (data.pet.stage !== prevStageRef.current) {
+            const oldLabel = STAGE_LABELS[prevStageRef.current] ?? prevStageRef.current
+            const newLabel = STAGE_LABELS[data.pet.stage] ?? data.pet.stage
+            setEvolveText(`✨ 성장했어요! ${oldLabel} → ${newLabel}`)
+            setShowEvolveEffect(true)
+          }
+          prevStageRef.current = data.pet.stage
+          setPet(data.pet)
+        }
+        if (data.event) {
+          setEventPopup(data.event)
+          setTimeout(() => setEventPopup(null), 3000)
+        }
       })
       .catch(err => console.error('[tick] Fetch failed:', err))
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -213,7 +343,23 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
       const res = await fetch(`/api/pets/${pet.id}/${action}`, { method: 'POST' })
       const data = await res.json()
       if (res.ok && data.pet) {
+        if (data.pet.stage !== prevStageRef.current) {
+          const oldLabel = STAGE_LABELS[prevStageRef.current] ?? prevStageRef.current
+          const newLabel = STAGE_LABELS[data.pet.stage] ?? data.pet.stage
+          setEvolveText(`✨ 성장했어요! ${oldLabel} → ${newLabel}`)
+          setShowEvolveEffect(true)
+        }
+        prevStageRef.current = data.pet.stage
         setPet(data.pet)
+
+        const animMap: Record<string, string> = {
+          feed: 'feed',
+          play: 'play',
+          sleep: 'sleep',
+          walk: 'walk',
+        }
+        if (animMap[action]) triggerAnimation(animMap[action])
+
         const msgs: Record<string, string> = {
           feed: '냠냠! 배가 불러졌어요 🍖',
           play: '신난다! 행복해졌어요 🎮',
@@ -246,6 +392,7 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
       const data = await res.json()
       if (res.ok && data.pet) {
         setPet(data.pet)
+        triggerAnimation(`train-${type}`)
         setMessage(type === 'strength' ? '💪 근력훈련 완료! 힘이 강해졌어요!' : '🧘 명상 완료! 지혜가 깊어졌어요!')
       } else {
         setMessage(data.error ?? '오류가 발생했습니다')
@@ -272,7 +419,15 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
       const data = await res.json()
       if (res.ok && data.pet) {
         setPet(data.pet)
-        setMessage(data.event ?? (data.won ? '⚔️ 승리!' : '⚔️ 패배...'))
+        const story = generateBattleStory(
+          data.attacker ?? { name: pet.name, strength: pet.strength, wisdom: pet.wisdom, dark: pet.dark, harmony: pet.harmony },
+          data.defender ?? { name: '상대', strength: 50, wisdom: 50, dark: 50, harmony: 50 },
+          data.won
+        )
+        const statChanges = data.won
+          ? [{ label: '힘', change: 2 }, { label: '행복', change: 10 }]
+          : [{ label: '에너지', change: -15 }]
+        setBattleResult({ story, won: data.won, statChanges })
       } else {
         setMessage(data.error ?? '오류가 발생했습니다')
       }
@@ -348,6 +503,52 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
 
   return (
     <div className="max-w-md mx-auto px-4 py-8 space-y-4">
+      {/* 진화 플래시 효과 */}
+      <AnimatePresence>
+        {showEvolveEffect && (
+          <motion.div
+            className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 1, 0.9, 0] }}
+            transition={{ duration: 1.6 }}
+            onAnimationComplete={() => setShowEvolveEffect(false)}
+          >
+            <div className="absolute inset-0 bg-yellow-300" />
+            <motion.div
+              className="relative z-10 text-center px-6 py-4 bg-gray-900 border-4 border-yellow-400 rounded-lg"
+              initial={{ scale: 0.4, opacity: 0 }}
+              animate={{ scale: [0.4, 1.2, 1], opacity: [0, 1, 1] }}
+              transition={{ duration: 1.0 }}
+            >
+              <p className="text-yellow-400 font-mono font-bold text-xl">{evolveText}</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 이벤트 팝업 (말풍선) */}
+      <AnimatePresence>
+        {eventPopup && (
+          <motion.div
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-40 bg-gray-900 border-2 border-yellow-400 rounded-lg px-4 py-2 max-w-xs w-full"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <p className="text-yellow-400 font-mono text-xs text-center">{eventPopup}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 싸움 결과 모달 */}
+      <BattleResultModal
+        open={!!battleResult}
+        story={battleResult?.story ?? ''}
+        won={battleResult?.won ?? false}
+        statChanges={battleResult?.statChanges ?? []}
+        onClose={() => setBattleResult(null)}
+      />
+
       {/* Header */}
       <header className="flex items-center justify-between">
         <h1
@@ -371,7 +572,11 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
       </header>
 
       {/* Pet display */}
-      <div className="pixel-card p-6 text-center space-y-3">
+      <motion.div
+        className="pixel-card p-6 text-center space-y-3"
+        animate={activeAnimation === 'train-strength' ? { x: [0, -8, 8, -8, 8, -4, 4, 0] } : {}}
+        transition={{ duration: 0.5 }}
+      >
         <div className="flex items-center justify-center gap-2 flex-wrap">
           <h2 className="text-green-300 font-mono font-bold text-xl">{pet.name}</h2>
           <span className="text-yellow-400 font-mono text-sm border border-yellow-400 px-2 py-0">
@@ -384,13 +589,37 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
           )}
         </div>
 
-        <div className="flex justify-center py-4">
-          <PixelPet
-            stage={pet.stage}
-            evolutionType={pet.evolution_type}
-            size="lg"
-            animate
-          />
+        {/* 펫 + 애니메이션 오버레이 */}
+        <div className="relative flex justify-center items-center py-4" style={{ minHeight: 140 }}>
+          <motion.div
+            animate={
+              activeAnimation === 'walk'
+                ? { x: [0, 55, -55, 0] }
+                : activeAnimation === 'feed'
+                ? { scale: [1, 1.18, 1] }
+                : {}
+            }
+            transition={{
+              duration: activeAnimation === 'walk' ? 1.1 : 0.5,
+              ease: 'easeInOut',
+            }}
+          >
+            <PixelPet
+              stage={pet.stage}
+              evolutionType={pet.evolution_type}
+              size="lg"
+              animate
+            />
+          </motion.div>
+
+          <AnimatePresence>
+            {activeAnimation === 'play' && <FloatingHearts key="hearts" />}
+            {activeAnimation === 'sleep' && <SleepZzz key="zzz" />}
+            {activeAnimation === 'train-wisdom' && <MeditationRings key="rings" />}
+            {activeAnimation === 'feed' && <FlyingFood key="food" />}
+            {activeAnimation === 'train-strength' && <StrengthPopup key="strength" />}
+            {activeAnimation === 'walk' && <WalkFootprints key="walk" />}
+          </AnimatePresence>
         </div>
 
         <p className="text-green-800 text-xs font-mono">{pet.age_days}일차</p>
@@ -402,7 +631,7 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
             {message}
           </p>
         )}
-      </div>
+      </motion.div>
 
       {/* Stats */}
       <div className="pixel-card p-4 space-y-3">

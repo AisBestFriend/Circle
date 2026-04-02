@@ -17,7 +17,7 @@ export async function POST(
 
   const { data: myPet } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, name, strength, energy, happiness')
+    .select('id, user_id, name, strength, wisdom, dark, harmony, energy, happiness')
     .eq('id', id)
     .eq('user_id', session.user.id)
     .eq('is_alive', true)
@@ -27,7 +27,7 @@ export async function POST(
 
   const { data: targetPet } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, name, strength')
+    .select('id, user_id, name, strength, wisdom, dark, harmony')
     .eq('id', targetPetId)
     .eq('is_alive', true)
     .single()
@@ -87,5 +87,8 @@ export async function POST(
     { pet_id: targetPet.id, other_pet_id: myPet.id, event_type: 'fight', description },
   ])
 
-  return NextResponse.json({ pet: updatedPet, won, event: description })
+  const attackerStats = { name: myPet.name, strength: myPet.strength, wisdom: myPet.wisdom, dark: myPet.dark, harmony: myPet.harmony }
+  const defenderStats = { name: targetPet.name, strength: targetPet.strength, wisdom: targetPet.wisdom, dark: targetPet.dark, harmony: targetPet.harmony }
+
+  return NextResponse.json({ pet: updatedPet, won, event: description, attacker: attackerStats, defender: defenderStats })
 }

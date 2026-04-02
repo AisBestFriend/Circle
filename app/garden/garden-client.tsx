@@ -2,12 +2,15 @@
 
 import { useState } from 'react'
 import { Session } from 'next-auth'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { PixelPet } from '@/components/pixel-pet'
 import { StatBar } from '@/components/stat-bar'
 import { Badge } from '@/components/ui/badge'
 import { STAGE_LABELS } from '@/lib/constants'
 import { Pet } from '@/types/game'
+import { BattleResultModal } from '@/components/battle-result-modal'
+import { generateBattleStory } from '@/lib/battle-story'
 
 const REL_ICONS: Record<string, string> = {
   love: '💘',
@@ -75,6 +78,7 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 export function GardenClient({ session, acceptedFriends, pendingReceived, myPet, recentEvents }: GardenClientProps) {
+  const router = useRouter()
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteMsg, setInviteMsg] = useState('')
   const [inviteLoading, setInviteLoading] = useState(false)
@@ -82,6 +86,11 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
   const [friends, setFriends] = useState(acceptedFriends)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [actionMsg, setActionMsg] = useState('')
+  const [battleResult, setBattleResult] = useState<{
+    story: string
+    won: boolean
+    statChanges: { label: string; change: number }[]
+  } | null>(null)
 
   async function sendInvite(e: React.FormEvent) {
     e.preventDefault()
@@ -115,7 +124,7 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
       const res = await fetch(`/api/friends/${friendshipId}/accept`, { method: 'POST' })
       if (res.ok) {
         setPending(prev => prev.filter(p => p.friendshipId !== friendshipId))
-        window.location.reload()
+        router.refresh()
       }
     } finally {
       setActionLoading(null)
@@ -129,6 +138,7 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
       const res = await fetch(`/api/friends/${friendshipId}`, { method: 'DELETE' })
       if (res.ok) {
         setPending(prev => prev.filter(p => p.friendshipId !== friendshipId))
+        router.refresh()
       }
     } finally {
       setActionLoading(null)
@@ -148,7 +158,7 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
     }
   }
 
-  async function callFight(targetPetId: string) {
+  async function callFight(targetPetId: string, targetPet: Pet) {
     if (!myPet || actionLoading) return
     setActionLoading(`fight-${targetPetId}`)
     setActionMsg('')
@@ -160,7 +170,11 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
       })
       const data = await res.json()
       if (res.ok) {
-        setActionMsg(data.event ?? (data.won ? '⚔️ 승리!' : '⚔️ 패배...'))
+        const story = generateBattleStory(myPet, targetPet, data.won)
+        const statChanges = data.won
+          ? [{ label: '힘', change: 2 }, { label: '행복', change: 10 }]
+          : [{ label: '에너지', change: -15 }]
+        setBattleResult({ story, won: data.won, statChanges })
       } else {
         setActionMsg(data.error ?? '오류가 발생했습니다')
       }
@@ -196,6 +210,13 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+      <BattleResultModal
+        open={!!battleResult}
+        story={battleResult?.story ?? ''}
+        won={battleResult?.won ?? false}
+        statChanges={battleResult?.statChanges ?? []}
+        onClose={() => setBattleResult(null)}
+      />
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="text-gray-400 hover:text-white font-mono text-sm">
@@ -287,7 +308,7 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
                 myPet={myPet}
                 onRemove={() => removeFriend(f.friendshipId)}
                 removing={actionLoading === f.friendshipId}
-                onFight={callFight}
+                onFight={(petId, pet) => callFight(petId, pet)}
                 onLetter={callLetter}
                 actionLoading={actionLoading}
               />
@@ -332,7 +353,7 @@ function FriendCard({
   myPet: Pet | null
   onRemove: () => void
   removing: boolean
-  onFight: (targetPetId: string) => void
+  onFight: (targetPetId: string, pet: Pet) => void
   onLetter: (targetPetId: string) => void
   actionLoading: string | null
 }) {
@@ -386,7 +407,7 @@ function FriendCard({
               </div>
               <div className="flex gap-2 pt-1">
                 <button
-                  onClick={() => onFight(entry.pet!.id)}
+                  onClick={() => onFight(entry.pet!.id, entry.pet!)}
                   disabled={!!actionLoading}
                   className="flex-1 pixel-btn font-mono text-red-400 border-red-700 hover:border-red-400 disabled:opacity-40 py-1.5 text-xs"
                 >

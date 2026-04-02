@@ -1,4 +1,4 @@
-export type PetStage = 'egg' | 'baby' | 'teen' | 'adult' | 'ultimate'
+export type PetStage = 'egg' | 'baby' | 'teen' | 'adult' | 'ultimate' | 'elder'
 export type EvolutionType = 'warrior' | 'sage' | 'dark' | 'balance'
 export type RelationshipType = 'love' | 'friend' | 'rival' | 'enemy'
 
@@ -21,6 +21,7 @@ export interface Pet {
   born_at: string
   stage_entered_at: string
   last_fed_at: string
+  final_choice_required: boolean
 }
 
 export interface Relationship {

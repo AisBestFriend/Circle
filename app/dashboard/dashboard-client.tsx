@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Session } from 'next-auth'
 import { signOut } from 'next-auth/react'
 import Link from 'next/link'
@@ -31,10 +31,81 @@ const STAGE_LABELS: Record<string, string> = {
   teen: '성숙기',
   adult: '완전체',
   ultimate: '궁극체',
+  elder: '노년기',
 }
 
 const REL_ICONS: Record<string, string> = { love: '💘', friend: '🤝', rival: '⚔️', enemy: '😤' }
 const REL_LABELS: Record<string, string> = { love: '사랑', friend: '우정', rival: '라이벌', enemy: '앙숙' }
+
+function formatDuration(seconds: number): string {
+  if (seconds <= 0) return '성장 준비!'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return `${h}시간 ${m}분`
+  if (m > 0) return `${m}분 ${s}초`
+  return `${s}초`
+}
+
+function GrowthTimer({ pet }: { pet: Pet }) {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  if (pet.stage === 'egg') {
+    const remaining = Math.floor((new Date(pet.born_at).getTime() + 600_000 - now) / 1000)
+    return (
+      <p className="text-yellow-500 text-xs font-mono">
+        {remaining > 0 ? `유아기까지: ${formatDuration(remaining)}` : '🎉 성장 준비!'}
+      </p>
+    )
+  }
+
+  if (pet.stage === 'baby') {
+    const remaining = Math.floor((new Date(pet.stage_entered_at).getTime() + 48 * 3600_000 - now) / 1000)
+    return (
+      <p className="text-yellow-500 text-xs font-mono">
+        {remaining > 0
+          ? `성숙기까지: ${formatDuration(remaining)} (평균 스탯 60 이상 필요)`
+          : '🎉 성장 조건 충족!'}
+      </p>
+    )
+  }
+
+  if (pet.stage === 'teen') {
+    const remaining = Math.floor((new Date(pet.stage_entered_at).getTime() + 72 * 3600_000 - now) / 1000)
+    return (
+      <p className="text-yellow-500 text-xs font-mono">
+        {remaining > 0
+          ? `완전체까지: ${formatDuration(remaining)} (평균 스탯 70 이상 필요)`
+          : '🎉 성장 조건 충족!'}
+      </p>
+    )
+  }
+
+  if (pet.stage === 'ultimate') {
+    const remaining = Math.floor((new Date(pet.stage_entered_at).getTime() + 259200_000 - now) / 1000)
+    return (
+      <p className="text-yellow-500 text-xs font-mono">
+        {remaining > 0 ? `노년기까지: ${formatDuration(remaining)}` : '🎉 노년기 전환 준비!'}
+      </p>
+    )
+  }
+
+  if (pet.stage === 'elder') {
+    const daysLeft = Math.max(0, 10 - pet.age_days)
+    return (
+      <p className="text-yellow-500 text-xs font-mono">
+        최종 선택까지 D-{daysLeft}일
+      </p>
+    )
+  }
+
+  return null
+}
 
 export function DashboardClient({ session, initialPet, initialRelationships = [] }: DashboardClientProps) {
   const [pet, setPet] = useState<Pet | null>(initialPet)
@@ -57,6 +128,35 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
           evolve: `✨ ${data.pet.name}이(가) 궁극체로 진화했어요!`,
         }
         setMessage(msgs[action] ?? '완료!')
+      } else {
+        setMessage(data.error ?? '오류가 발생했습니다')
+      }
+    } catch {
+      setMessage('네트워크 오류가 발생했습니다')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function callRebirth(type: 'rebirth' | 'reset') {
+    if (!pet || actionLoading) return
+    setActionLoading(type)
+    setMessage('')
+
+    try {
+      const res = await fetch(`/api/pets/${pet.id}/rebirth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type }),
+      })
+      const data = await res.json()
+      if (res.ok && data.pet) {
+        setPet(data.pet)
+        setMessage(
+          type === 'rebirth'
+            ? `🥚 ${data.pet.name}이(가) 새로운 알로 부활했어요!`
+            : '🔄 새로운 알이 생성되었어요!'
+        )
       } else {
         setMessage(data.error ?? '오류가 발생했습니다')
       }
@@ -148,6 +248,8 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
 
         <p className="text-green-800 text-xs font-mono">{pet.age_days}일차</p>
 
+        <GrowthTimer pet={pet} />
+
         {message && (
           <p className="text-yellow-400 text-xs font-mono border border-yellow-900 py-1 px-2">
             {message}
@@ -163,7 +265,7 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
         <StatBar label="에너지" value={pet.energy} color="bg-cyan-400" />
       </div>
 
-      {(pet.stage === 'adult' || pet.stage === 'ultimate') && (
+      {(pet.stage === 'adult' || pet.stage === 'ultimate' || pet.stage === 'elder') && (
         <div className="pixel-card p-4 space-y-3">
           <h3 className="text-green-600 font-mono text-xs uppercase tracking-widest">── 능력치 ──</h3>
           <StatBar label="힘" value={pet.strength} color="bg-red-400" />
@@ -191,6 +293,32 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
                 <span className="text-gray-500 font-mono text-xs w-6 text-right shrink-0">{rel.intensity}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Final choice (elder 10일차) */}
+      {pet.final_choice_required && (
+        <div className="pixel-card p-4 space-y-3 border-yellow-400">
+          <h3 className="text-yellow-400 font-mono text-xs uppercase tracking-widest">── ⚠️ 최종 선택 ──</h3>
+          <p className="text-green-300 font-mono text-xs">
+            {pet.name}의 생애가 마무리되어 가고 있어요. 다음 여정을 선택해주세요.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => callRebirth('rebirth')}
+              disabled={!!actionLoading}
+              className="pixel-btn font-mono text-yellow-400 border-yellow-700 hover:border-yellow-400 disabled:opacity-40 py-2 text-sm"
+            >
+              {actionLoading === 'rebirth' ? '...' : '🥚 알로 부활'}
+            </button>
+            <button
+              onClick={() => callRebirth('reset')}
+              disabled={!!actionLoading}
+              className="pixel-btn font-mono text-red-400 border-red-700 hover:border-red-400 disabled:opacity-40 py-2 text-sm"
+            >
+              {actionLoading === 'reset' ? '...' : '🔄 완전 초기화'}
+            </button>
           </div>
         </div>
       )}

@@ -20,9 +20,9 @@ export function calcTick(pet: Pet & { last_tick_at?: string | null; ultimate_at?
   const hours = elapsedSeconds / 3600
 
   // Stat decay
-  const hunger = Math.max(0, Math.round((pet.hunger - 5 * hours) * 100) / 100)
-  const happiness = Math.max(0, Math.round((pet.happiness - 3 * hours) * 100) / 100)
-  const energy = Math.max(0, Math.round((pet.energy - 4 * hours) * 100) / 100)
+  const hunger = Math.max(0, Math.round(pet.hunger - 5 * hours))
+  const happiness = Math.max(0, Math.round(pet.happiness - 3 * hours))
+  const energy = Math.max(0, Math.round(pet.energy - 4 * hours))
 
   // Growth check
   let stage = pet.stage

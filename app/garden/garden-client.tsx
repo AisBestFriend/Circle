@@ -23,6 +23,22 @@ const REL_LABELS: Record<string, string> = {
   enemy: '앙숙',
 }
 
+const EVENT_ICONS: Record<string, string> = {
+  relationship_formed: '🤝',
+  fight: '⚔️',
+  love: '💘',
+  friendship: '🤝',
+  level_up: '⭐',
+  death: '💀',
+}
+
+interface PetEvent {
+  id: string
+  event_type: string
+  description: string
+  created_at: string
+}
+
 interface FriendEntry {
   friendshipId: string
   user: { id: string; name?: string | null; email?: string; image?: string | null }
@@ -41,9 +57,21 @@ interface GardenClientProps {
   acceptedFriends: FriendEntry[]
   pendingReceived: PendingEntry[]
   myPet: Pet | null
+  recentEvents: PetEvent[]
 }
 
-export function GardenClient({ session, acceptedFriends, pendingReceived, myPet }: GardenClientProps) {
+function formatRelativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+  if (days > 0) return `${days}일 전`
+  if (hours > 0) return `${hours}시간 전`
+  if (mins > 0) return `${mins}분 전`
+  return '방금'
+}
+
+export function GardenClient({ session, acceptedFriends, pendingReceived, myPet, recentEvents }: GardenClientProps) {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteMsg, setInviteMsg] = useState('')
   const [inviteLoading, setInviteLoading] = useState(false)
@@ -208,6 +236,26 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet 
           </div>
         </div>
       )}
+
+      {/* Recent event log */}
+      {recentEvents.length > 0 && (
+        <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 space-y-3">
+          <h2 className="text-purple-400 font-mono text-sm font-bold">── 최근 이벤트 로그 ──</h2>
+          <div className="space-y-2">
+            {recentEvents.map(ev => (
+              <div key={ev.id} className="flex items-start gap-2">
+                <span className="text-base shrink-0">{EVENT_ICONS[ev.event_type] ?? '📌'}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-gray-300 font-mono text-xs leading-relaxed">{ev.description}</p>
+                </div>
+                <span className="text-gray-600 font-mono text-xs shrink-0 whitespace-nowrap">
+                  {formatRelativeTime(ev.created_at)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -259,16 +307,18 @@ function FriendCard({
           </div>
 
           {myPet && rel && (
-            <div className="flex items-center gap-2 pt-1 border-t border-gray-800">
-              <span className="text-lg">{REL_ICONS[rel.type] ?? '🤝'}</span>
-              <span className="text-gray-300 font-mono text-xs">{REL_LABELS[rel.type] ?? rel.type}</span>
-              <div className="flex-1 h-1 bg-gray-800 rounded">
+            <div className="space-y-1 pt-1 border-t border-gray-800">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{REL_ICONS[rel.type] ?? '🤝'}</span>
+                <span className="text-gray-300 font-mono text-xs">{REL_LABELS[rel.type] ?? rel.type}</span>
+                <span className="text-gray-500 font-mono text-xs ml-auto">{rel.intensity}</span>
+              </div>
+              <div className="w-full h-1.5 bg-gray-800 rounded">
                 <div
-                  className="h-1 bg-yellow-400 rounded"
+                  className="h-1.5 bg-yellow-400 rounded transition-all"
                   style={{ width: `${rel.intensity}%` }}
                 />
               </div>
-              <span className="text-gray-500 font-mono text-xs">{rel.intensity}</span>
             </div>
           )}
 

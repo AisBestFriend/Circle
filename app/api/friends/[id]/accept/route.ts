@@ -26,6 +26,21 @@ function determineRelationshipType(
   return 'friend'
 }
 
+function buildEventDescription(relType: string, petAName: string, petBName: string): string {
+  switch (relType) {
+    case 'love':
+      return `${petAName}이(가) ${petBName}에게 반했어요 💘`
+    case 'friend':
+      return `${petAName}와(과) ${petBName}가 친구가 됐어요 🤝`
+    case 'rival':
+      return `${petAName}와(과) ${petBName}가 서로 라이벌로 인정했어요 ⚔️`
+    case 'enemy':
+      return `${petAName}와(과) ${petBName}가 앙숙이 됐어요 😤`
+    default:
+      return `${petAName}와(과) ${petBName}가 만났어요`
+  }
+}
+
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -73,6 +88,23 @@ export async function POST(
     await supabaseAdmin
       .from('relationships')
       .upsert({ pet_a_id: firstId, pet_b_id: secondId, type: relType, intensity })
+
+    // Record relationship_formed events for both pets
+    const description = buildEventDescription(relType, petA.name, petB.name)
+    await supabaseAdmin.from('pet_events').insert([
+      {
+        pet_id: petA.id,
+        other_pet_id: petB.id,
+        event_type: 'relationship_formed',
+        description,
+      },
+      {
+        pet_id: petB.id,
+        other_pet_id: petA.id,
+        event_type: 'relationship_formed',
+        description,
+      },
+    ])
   }
 
   return NextResponse.json({ success: true })

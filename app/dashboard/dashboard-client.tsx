@@ -19,10 +19,18 @@ interface RelationshipWithPet {
   otherPet: { id: string; name: string; stage: string; evolution_type: string | null } | null
 }
 
+interface PetEvent {
+  id: string
+  event_type: string
+  description: string
+  created_at: string
+}
+
 interface DashboardClientProps {
   session: Session
   initialPet: Pet | null
   initialRelationships?: RelationshipWithPet[]
+  recentEvents?: PetEvent[]
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -36,6 +44,26 @@ const STAGE_LABELS: Record<string, string> = {
 
 const REL_ICONS: Record<string, string> = { love: '💘', friend: '🤝', rival: '⚔️', enemy: '😤' }
 const REL_LABELS: Record<string, string> = { love: '사랑', friend: '우정', rival: '라이벌', enemy: '앙숙' }
+
+const EVENT_ICONS: Record<string, string> = {
+  relationship_formed: '🤝',
+  fight: '⚔️',
+  love: '💘',
+  friendship: '🤝',
+  level_up: '⭐',
+  death: '💀',
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+  if (days > 0) return `${days}일 전`
+  if (hours > 0) return `${hours}시간 전`
+  if (mins > 0) return `${mins}분 전`
+  return '방금'
+}
 
 function formatDuration(seconds: number): string {
   if (seconds <= 0) return '성장 준비!'
@@ -110,7 +138,7 @@ function GrowthTimer({ pet }: { pet: Pet }) {
   return null
 }
 
-export function DashboardClient({ session, initialPet, initialRelationships = [] }: DashboardClientProps) {
+export function DashboardClient({ session, initialPet, initialRelationships = [], recentEvents = [] }: DashboardClientProps) {
   const [pet, setPet] = useState<Pet | null>(initialPet)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [message, setMessage] = useState('')
@@ -310,6 +338,24 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
                   <div className="h-1 bg-yellow-400 rounded" style={{ width: `${rel.intensity}%` }} />
                 </div>
                 <span className="text-gray-500 font-mono text-xs w-6 text-right shrink-0">{rel.intensity}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent event log */}
+      {recentEvents.length > 0 && (
+        <div className="pixel-card p-4 space-y-3">
+          <h3 className="text-green-600 font-mono text-xs uppercase tracking-widest">── 최근 이벤트 ──</h3>
+          <div className="space-y-2">
+            {recentEvents.map(ev => (
+              <div key={ev.id} className="flex items-start gap-2">
+                <span className="text-sm shrink-0">{EVENT_ICONS[ev.event_type] ?? '📌'}</span>
+                <p className="text-gray-400 font-mono text-xs flex-1 leading-relaxed">{ev.description}</p>
+                <span className="text-gray-600 font-mono text-xs shrink-0 whitespace-nowrap">
+                  {formatRelativeTime(ev.created_at)}
+                </span>
               </div>
             ))}
           </div>

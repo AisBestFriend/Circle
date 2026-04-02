@@ -34,7 +34,7 @@ export default async function GardenPage() {
 
   const allRelevantIds = [...new Set([...friendIds, ...pendingReceivedIds])]
 
-  const [{ data: users }, { data: friendPets }, { data: myRelationships }] = await Promise.all([
+  const [{ data: users }, { data: friendPets }, { data: myRelationships }, { data: recentEvents }] = await Promise.all([
     allRelevantIds.length > 0
       ? supabaseAdmin.from('users').select('id, name, email, image').in('id', allRelevantIds)
       : Promise.resolve({ data: [] as any[] }),
@@ -46,6 +46,14 @@ export default async function GardenPage() {
           .from('relationships')
           .select('*')
           .or(`pet_a_id.eq.${myPet.id},pet_b_id.eq.${myPet.id}`)
+      : Promise.resolve({ data: [] as any[] }),
+    myPet
+      ? supabaseAdmin
+          .from('pet_events')
+          .select('id, event_type, description, created_at')
+          .eq('pet_id', myPet.id)
+          .order('created_at', { ascending: false })
+          .limit(10)
       : Promise.resolve({ data: [] as any[] }),
   ])
 
@@ -90,6 +98,7 @@ export default async function GardenPage() {
         acceptedFriends={acceptedFriends as any}
         pendingReceived={pendingReceived as any}
         myPet={myPet ?? null}
+        recentEvents={recentEvents ?? []}
       />
     </main>
   )

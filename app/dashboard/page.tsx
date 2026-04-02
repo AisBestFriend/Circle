@@ -38,9 +38,24 @@ export default async function DashboardPage() {
     }
   }
 
+  // Fetch recent events for this pet
+  const { data: recentEvents } = pet
+    ? await supabaseAdmin
+        .from('pet_events')
+        .select('id, event_type, description, created_at')
+        .eq('pet_id', pet.id)
+        .order('created_at', { ascending: false })
+        .limit(5)
+    : { data: [] as any[] }
+
   return (
     <main className="min-h-screen pixel-bg text-white">
-      <DashboardClient session={session} initialPet={pet} initialRelationships={relationships} />
+      <DashboardClient
+        session={session}
+        initialPet={pet}
+        initialRelationships={relationships}
+        recentEvents={recentEvents ?? []}
+      />
     </main>
   )
 }

@@ -15,9 +15,32 @@ export default async function DashboardPage() {
     .eq('is_alive', true)
     .single()
 
+  // Fetch relationships for this pet
+  let relationships: any[] = []
+  if (pet) {
+    const { data: rels } = await supabaseAdmin
+      .from('relationships')
+      .select('id, pet_a_id, pet_b_id, type, intensity')
+      .or(`pet_a_id.eq.${pet.id},pet_b_id.eq.${pet.id}`)
+
+    if (rels && rels.length > 0) {
+      const otherPetIds = rels.map(r => (r.pet_a_id === pet.id ? r.pet_b_id : r.pet_a_id))
+      const { data: otherPets } = await supabaseAdmin
+        .from('pets')
+        .select('id, name, stage, evolution_type, user_id')
+        .in('id', otherPetIds)
+
+      const petsMap = Object.fromEntries((otherPets ?? []).map((p: any) => [p.id, p]))
+      relationships = rels.map(r => ({
+        ...r,
+        otherPet: petsMap[r.pet_a_id === pet.id ? r.pet_b_id : r.pet_a_id] ?? null,
+      }))
+    }
+  }
+
   return (
     <main className="min-h-screen pixel-bg text-white">
-      <DashboardClient session={session} initialPet={pet} />
+      <DashboardClient session={session} initialPet={pet} initialRelationships={relationships} />
     </main>
   )
 }

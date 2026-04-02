@@ -10,9 +10,19 @@ import { StatBar } from '@/components/stat-bar'
 import { CreatePetForm } from './create-pet-form'
 import { ThemeToggle } from '@/components/theme-toggle'
 
+interface RelationshipWithPet {
+  id: string
+  pet_a_id: string
+  pet_b_id: string
+  type: 'love' | 'friend' | 'rival' | 'enemy'
+  intensity: number
+  otherPet: { id: string; name: string; stage: string; evolution_type: string | null } | null
+}
+
 interface DashboardClientProps {
   session: Session
   initialPet: Pet | null
+  initialRelationships?: RelationshipWithPet[]
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -23,7 +33,10 @@ const STAGE_LABELS: Record<string, string> = {
   ultimate: '궁극체',
 }
 
-export function DashboardClient({ session, initialPet }: DashboardClientProps) {
+const REL_ICONS: Record<string, string> = { love: '💘', friend: '🤝', rival: '⚔️', enemy: '😤' }
+const REL_LABELS: Record<string, string> = { love: '사랑', friend: '우정', rival: '라이벌', enemy: '앙숙' }
+
+export function DashboardClient({ session, initialPet, initialRelationships = [] }: DashboardClientProps) {
   const [pet, setPet] = useState<Pet | null>(initialPet)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [message, setMessage] = useState('')
@@ -157,6 +170,28 @@ export function DashboardClient({ session, initialPet }: DashboardClientProps) {
           <StatBar label="지혜" value={pet.wisdom} color="bg-blue-400" />
           <StatBar label="암흑" value={pet.dark} color="bg-purple-400" />
           <StatBar label="조화" value={pet.harmony} color="bg-green-400" />
+        </div>
+      )}
+
+      {/* Relationships */}
+      {initialRelationships.length > 0 && (
+        <div className="pixel-card p-4 space-y-3">
+          <h3 className="text-green-600 font-mono text-xs uppercase tracking-widest">── 관계 현황 ──</h3>
+          <div className="space-y-2">
+            {initialRelationships.map(rel => (
+              <div key={rel.id} className="flex items-center gap-2">
+                <span className="text-base">{REL_ICONS[rel.type] ?? '🤝'}</span>
+                <span className="text-gray-300 font-mono text-xs w-16 shrink-0">{REL_LABELS[rel.type] ?? rel.type}</span>
+                <span className="text-green-300 font-mono text-xs flex-1 truncate">
+                  {rel.otherPet?.name ?? '???'}
+                </span>
+                <div className="w-16 h-1 bg-gray-800 rounded shrink-0">
+                  <div className="h-1 bg-yellow-400 rounded" style={{ width: `${rel.intensity}%` }} />
+                </div>
+                <span className="text-gray-500 font-mono text-xs w-6 text-right shrink-0">{rel.intensity}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

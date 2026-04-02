@@ -84,6 +84,36 @@
   --sidebar-ring: oklch(0.82 0.18 85);
 }
 
+html.light {
+  /* Light retro beige/cream theme */
+  --background: oklch(0.96 0.02 85);
+  --foreground: oklch(0.18 0.03 160);
+  --card: oklch(0.92 0.025 85);
+  --card-foreground: oklch(0.18 0.03 160);
+  --popover: oklch(0.92 0.025 85);
+  --popover-foreground: oklch(0.18 0.03 160);
+  --primary: oklch(0.55 0.12 85);
+  --primary-foreground: oklch(0.96 0.02 85);
+  --secondary: oklch(0.89 0.03 85);
+  --secondary-foreground: oklch(0.18 0.03 160);
+  --muted: oklch(0.89 0.03 85);
+  --muted-foreground: oklch(0.45 0.04 160);
+  --accent: oklch(0.89 0.03 85);
+  --accent-foreground: oklch(0.18 0.03 160);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.7 0.04 85);
+  --input: oklch(0.89 0.03 85);
+  --ring: oklch(0.55 0.12 85);
+  --sidebar: oklch(0.92 0.025 85);
+  --sidebar-foreground: oklch(0.18 0.03 160);
+  --sidebar-primary: oklch(0.55 0.12 85);
+  --sidebar-primary-foreground: oklch(0.96 0.02 85);
+  --sidebar-accent: oklch(0.89 0.03 85);
+  --sidebar-accent-foreground: oklch(0.18 0.03 160);
+  --sidebar-border: oklch(0.7 0.04 85);
+  --sidebar-ring: oklch(0.55 0.12 85);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -95,6 +125,27 @@
   html {
     font-family: 'Courier New', Courier, monospace;
   }
+}
+
+/* Light mode pixel classes */
+html.light .pixel-bg {
+  background-color: #f5f0e8;
+  background-image:
+    linear-gradient(rgba(80, 60, 20, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(80, 60, 20, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+html.light .pixel-card {
+  background-color: #ede8dc;
+  border: 2px solid #c8b89a;
+  box-shadow:
+    0 0 0 1px #d4c4a8,
+    inset 0 0 0 1px #d4c4a8;
+}
+
+html.light .pixel-card:hover {
+  border-color: #a0845c;
 }
 
 /* Pixel art rendering */

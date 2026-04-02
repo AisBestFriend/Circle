@@ -8,6 +8,7 @@ import { Pet, EVOLUTION_TRAITS } from '@/types/game'
 import { PixelPet } from '@/components/pixel-pet'
 import { StatBar } from '@/components/stat-bar'
 import { CreatePetForm } from './create-pet-form'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 interface DashboardClientProps {
   session: Session
@@ -63,12 +64,15 @@ export function DashboardClient({ session, initialPet }: DashboardClientProps) {
           >
             CIRCLE
           </h1>
-          <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
-            className="text-green-700 hover:text-green-400 text-xs font-mono"
-          >
-            [로그아웃]
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              className="text-green-700 hover:text-green-400 text-xs font-mono"
+            >
+              [로그아웃]
+            </button>
+          </div>
         </header>
         <div className="text-center space-y-4 py-8">
           <div className="text-6xl animate-bounce">🥚</div>
@@ -96,6 +100,7 @@ export function DashboardClient({ session, initialPet }: DashboardClientProps) {
           <Link href="/garden" className="text-green-600 hover:text-green-300 text-xs font-mono">
             [가든]
           </Link>
+          <ThemeToggle />
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
             className="text-green-700 hover:text-green-400 text-xs font-mono"

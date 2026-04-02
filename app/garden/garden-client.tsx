@@ -30,6 +30,9 @@ const EVENT_ICONS: Record<string, string> = {
   friendship: '🤝',
   level_up: '⭐',
   death: '💀',
+  walk: '🚶',
+  letter: '💌',
+  random: '✨',
 }
 
 interface PetEvent {
@@ -78,6 +81,7 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
   const [pending, setPending] = useState(pendingReceived)
   const [friends, setFriends] = useState(acceptedFriends)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [actionMsg, setActionMsg] = useState('')
 
   async function sendInvite(e: React.FormEvent) {
     e.preventDefault()
@@ -111,7 +115,6 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
       const res = await fetch(`/api/friends/${friendshipId}/accept`, { method: 'POST' })
       if (res.ok) {
         setPending(prev => prev.filter(p => p.friendshipId !== friendshipId))
-        // Reload page to get updated friends list with pet data
         window.location.reload()
       }
     } finally {
@@ -140,6 +143,52 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
       if (res.ok) {
         setFriends(prev => prev.filter(f => f.friendshipId !== friendshipId))
       }
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function callFight(targetPetId: string) {
+    if (!myPet || actionLoading) return
+    setActionLoading(`fight-${targetPetId}`)
+    setActionMsg('')
+    try {
+      const res = await fetch(`/api/pets/${myPet.id}/fight`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetPetId }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setActionMsg(data.event ?? (data.won ? '⚔️ 승리!' : '⚔️ 패배...'))
+      } else {
+        setActionMsg(data.error ?? '오류가 발생했습니다')
+      }
+    } catch {
+      setActionMsg('네트워크 오류가 발생했습니다')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function callLetter(targetPetId: string) {
+    if (!myPet || actionLoading) return
+    setActionLoading(`letter-${targetPetId}`)
+    setActionMsg('')
+    try {
+      const res = await fetch(`/api/pets/${myPet.id}/letter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetPetId, message: '안녕!' }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setActionMsg(data.event ?? '💌 편지를 보냈어요!')
+      } else {
+        setActionMsg(data.error ?? '오류가 발생했습니다')
+      }
+    } catch {
+      setActionMsg('네트워크 오류가 발생했습니다')
     } finally {
       setActionLoading(null)
     }
@@ -180,6 +229,13 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
           <p className="text-yellow-400 text-xs font-mono">{inviteMsg}</p>
         )}
       </div>
+
+      {/* Action result message */}
+      {actionMsg && (
+        <div className="bg-gray-900 border border-yellow-700 rounded-lg px-4 py-2">
+          <p className="text-yellow-400 text-xs font-mono">{actionMsg}</p>
+        </div>
+      )}
 
       {/* Pending received requests */}
       {pending.length > 0 && (
@@ -231,6 +287,9 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
                 myPet={myPet}
                 onRemove={() => removeFriend(f.friendshipId)}
                 removing={actionLoading === f.friendshipId}
+                onFight={callFight}
+                onLetter={callLetter}
+                actionLoading={actionLoading}
               />
             ))}
           </div>
@@ -265,11 +324,17 @@ function FriendCard({
   myPet,
   onRemove,
   removing,
+  onFight,
+  onLetter,
+  actionLoading,
 }: {
   entry: FriendEntry
   myPet: Pet | null
   onRemove: () => void
   removing: boolean
+  onFight: (targetPetId: string) => void
+  onLetter: (targetPetId: string) => void
+  actionLoading: string | null
 }) {
   const rel = entry.relationship
 
@@ -307,9 +372,9 @@ function FriendCard({
           </div>
 
           {myPet && rel && (
-            <div className="space-y-1 pt-1 border-t border-gray-800">
+            <div className="space-y-2 pt-1 border-t border-gray-800">
               <div className="flex items-center gap-2">
-                <span className="text-lg">{REL_ICONS[rel.type] ?? '🤝'}</span>
+                <span className="text-2xl">{REL_ICONS[rel.type] ?? '🤝'}</span>
                 <span className="text-gray-300 font-mono text-xs">{REL_LABELS[rel.type] ?? rel.type}</span>
                 <span className="text-gray-500 font-mono text-xs ml-auto">{rel.intensity}</span>
               </div>
@@ -318,6 +383,22 @@ function FriendCard({
                   className="h-1.5 bg-yellow-400 rounded transition-all"
                   style={{ width: `${rel.intensity}%` }}
                 />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => onFight(entry.pet!.id)}
+                  disabled={!!actionLoading}
+                  className="flex-1 pixel-btn font-mono text-red-400 border-red-700 hover:border-red-400 disabled:opacity-40 py-1.5 text-xs"
+                >
+                  {actionLoading === `fight-${entry.pet.id}` ? '...' : '⚔️ 싸움걸기'}
+                </button>
+                <button
+                  onClick={() => onLetter(entry.pet!.id)}
+                  disabled={!!actionLoading}
+                  className="flex-1 pixel-btn font-mono text-pink-400 border-pink-700 hover:border-pink-400 disabled:opacity-40 py-1.5 text-xs"
+                >
+                  {actionLoading === `letter-${entry.pet.id}` ? '...' : '💌 편지보내기'}
+                </button>
               </div>
             </div>
           )}

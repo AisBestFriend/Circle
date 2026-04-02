@@ -1,5 +1,10 @@
 import type { Pet } from '@/types/game'
 
+export interface RandomTickEvent {
+  description: string
+  event_type: string
+}
+
 export interface TickResult {
   hunger: number
   happiness: number
@@ -11,7 +16,15 @@ export interface TickResult {
   last_tick_at: string
   ultimate_at?: string | null
   elder_at?: string | null
+  randomEvent?: RandomTickEvent | null
 }
+
+const RANDOM_TICK_EVENTS: Array<RandomTickEvent & { hungerDelta: number; happinessDelta: number; energyDelta: number }> = [
+  { description: '오늘 유독 배가 고프네요 🍖', event_type: 'random', hungerDelta: -5, happinessDelta: 0, energyDelta: 0 },
+  { description: '좋은 꿈을 꿨어요 ✨', event_type: 'random', hungerDelta: 0, happinessDelta: 5, energyDelta: 0 },
+  { description: '기분이 안 좋아요 😞', event_type: 'random', hungerDelta: 0, happinessDelta: -5, energyDelta: 0 },
+  { description: '왠지 힘이 넘치는 날이에요 💪', event_type: 'random', hungerDelta: 0, happinessDelta: 0, energyDelta: 10 },
+]
 
 export function calcTick(pet: Pet & { last_tick_at?: string | null; ultimate_at?: string | null; elder_at?: string | null }): TickResult {
   const now = new Date()
@@ -71,6 +84,16 @@ export function calcTick(pet: Pet & { last_tick_at?: string | null; ultimate_at?
     }
   }
 
+  // 5% chance of random event
+  let randomEvent: RandomTickEvent | null = null
+  if (Math.random() < 0.05) {
+    const picked = RANDOM_TICK_EVENTS[Math.floor(Math.random() * RANDOM_TICK_EVENTS.length)]
+    hunger = Math.max(0, Math.min(100, hunger + picked.hungerDelta))
+    happiness = Math.max(0, Math.min(100, happiness + picked.happinessDelta))
+    energy = Math.max(0, Math.min(100, energy + picked.energyDelta))
+    randomEvent = { description: picked.description, event_type: picked.event_type }
+  }
+
   return {
     hunger,
     happiness,
@@ -82,5 +105,6 @@ export function calcTick(pet: Pet & { last_tick_at?: string | null; ultimate_at?
     last_tick_at: now.toISOString(),
     ultimate_at,
     elder_at,
+    randomEvent,
   }
 }

@@ -52,6 +52,9 @@ const EVENT_ICONS: Record<string, string> = {
   friendship: '🤝',
   level_up: '⭐',
   death: '💀',
+  walk: '🚶',
+  letter: '💌',
+  random: '✨',
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -138,10 +141,51 @@ function GrowthTimer({ pet }: { pet: Pet }) {
   return null
 }
 
+function EvolutionGauge({ pet }: { pet: Pet }) {
+  const stats = [
+    { key: 'strength', label: '힘', value: pet.strength, color: 'bg-red-400' },
+    { key: 'wisdom', label: '지혜', value: pet.wisdom, color: 'bg-blue-400' },
+    { key: 'dark', label: '암흑', value: pet.dark, color: 'bg-purple-400' },
+    { key: 'harmony', label: '조화', value: pet.harmony, color: 'bg-green-400' },
+  ]
+  const maxVal = Math.max(...stats.map(s => s.value))
+  const topStat = stats.find(s => s.value === maxVal)
+
+  const evolutionHints: Record<string, string> = {
+    strength: '전사형 ⚔️',
+    wisdom: '현자형 ✨',
+    dark: '다크형 🌑',
+    harmony: '균형형 ☯️',
+  }
+
+  return (
+    <div className="pixel-card p-4 space-y-3">
+      <h3 className="text-green-600 font-mono text-xs uppercase tracking-widest">── 진화 게이지 ──</h3>
+      {stats.map(s => (
+        <div key={s.key} className="flex items-center gap-2">
+          <span className={`font-mono text-xs w-8 shrink-0 ${s.value === maxVal ? 'text-yellow-400 font-bold' : 'text-gray-400'}`}>
+            {s.label}
+          </span>
+          <div className="flex-1 h-2 bg-gray-800 rounded">
+            <div className={`h-2 rounded ${s.color}`} style={{ width: `${s.value}%` }} />
+          </div>
+          <span className="text-gray-500 font-mono text-xs w-6 text-right">{s.value}</span>
+        </div>
+      ))}
+      {topStat && (
+        <p className="text-yellow-400 text-xs font-mono text-center pt-1">
+          현재 방향: {evolutionHints[topStat.key]}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function DashboardClient({ session, initialPet, initialRelationships = [], recentEvents = [] }: DashboardClientProps) {
   const [pet, setPet] = useState<Pet | null>(initialPet)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [message, setMessage] = useState('')
+  const [showFightSelect, setShowFightSelect] = useState(false)
 
   useEffect(() => {
     if (!initialPet) return
@@ -154,6 +198,7 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
           return
         }
         if (data.pet) setPet(data.pet)
+        if (data.event) setMessage(data.event)
       })
       .catch(err => console.error('[tick] Fetch failed:', err))
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,9 +217,62 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
         const msgs: Record<string, string> = {
           feed: '냠냠! 배가 불러졌어요 🍖',
           play: '신난다! 행복해졌어요 🎮',
+          sleep: '쿨쿨... 에너지가 회복됐어요 😴',
+          walk: data.event ? data.event : '상쾌한 산책이었어요 🚶',
           evolve: `✨ ${data.pet.name}이(가) 궁극체로 진화했어요!`,
         }
         setMessage(msgs[action] ?? '완료!')
+      } else {
+        setMessage(data.error ?? '오류가 발생했습니다')
+      }
+    } catch {
+      setMessage('네트워크 오류가 발생했습니다')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function callTrain(type: 'strength' | 'wisdom') {
+    if (!pet || actionLoading) return
+    setActionLoading(`train-${type}`)
+    setMessage('')
+
+    try {
+      const res = await fetch(`/api/pets/${pet.id}/train`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type }),
+      })
+      const data = await res.json()
+      if (res.ok && data.pet) {
+        setPet(data.pet)
+        setMessage(type === 'strength' ? '💪 근력훈련 완료! 힘이 강해졌어요!' : '🧘 명상 완료! 지혜가 깊어졌어요!')
+      } else {
+        setMessage(data.error ?? '오류가 발생했습니다')
+      }
+    } catch {
+      setMessage('네트워크 오류가 발생했습니다')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function callFight(targetPetId: string) {
+    if (!pet || actionLoading) return
+    setActionLoading('fight')
+    setMessage('')
+    setShowFightSelect(false)
+
+    try {
+      const res = await fetch(`/api/pets/${pet.id}/fight`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetPetId }),
+      })
+      const data = await res.json()
+      if (res.ok && data.pet) {
+        setPet(data.pet)
+        setMessage(data.event ?? (data.won ? '⚔️ 승리!' : '⚔️ 패배...'))
       } else {
         setMessage(data.error ?? '오류가 발생했습니다')
       }
@@ -245,6 +343,8 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
   }
 
   const evolutionInfo = pet.evolution_type ? EVOLUTION_TRAITS[pet.evolution_type] : null
+  const isUltimateOrAbove = pet.stage === 'ultimate' || pet.stage === 'elder'
+  const fightablePets = initialRelationships.filter(r => r.otherPet !== null)
 
   return (
     <div className="max-w-md mx-auto px-4 py-8 space-y-4">
@@ -321,6 +421,9 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
           <StatBar label="조화" value={pet.harmony} color="bg-green-400" />
         </div>
       )}
+
+      {/* Evolution gauge (adult stage only) */}
+      {pet.stage === 'adult' && <EvolutionGauge pet={pet} />}
 
       {/* Relationships */}
       {initialRelationships.length > 0 && (
@@ -404,6 +507,34 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
         >
           {actionLoading === 'play' ? '...' : '🎮 놀아주기'}
         </button>
+        <button
+          onClick={() => callTrain('strength')}
+          disabled={!!actionLoading}
+          className="pixel-btn font-mono text-red-400 border-red-700 hover:border-red-400 disabled:opacity-40 py-2"
+        >
+          {actionLoading === 'train-strength' ? '...' : '🏋️ 근력훈련'}
+        </button>
+        <button
+          onClick={() => callTrain('wisdom')}
+          disabled={!!actionLoading}
+          className="pixel-btn font-mono text-blue-400 border-blue-700 hover:border-blue-400 disabled:opacity-40 py-2"
+        >
+          {actionLoading === 'train-wisdom' ? '...' : '🧘 명상'}
+        </button>
+        <button
+          onClick={() => callPetAction('sleep')}
+          disabled={!!actionLoading}
+          className="pixel-btn font-mono text-cyan-400 border-cyan-700 hover:border-cyan-400 disabled:opacity-40 py-2"
+        >
+          {actionLoading === 'sleep' ? '...' : '😴 재우기'}
+        </button>
+        <button
+          onClick={() => callPetAction('walk')}
+          disabled={!!actionLoading}
+          className="pixel-btn font-mono text-green-400 border-green-700 hover:border-green-400 disabled:opacity-40 py-2"
+        >
+          {actionLoading === 'walk' ? '...' : '🚶 산책'}
+        </button>
         {pet.stage === 'adult' && (
           <button
             onClick={() => callPetAction('evolve')}
@@ -412,6 +543,32 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
           >
             {actionLoading === 'evolve' ? '진화 중...' : '✨ 궁극체로 진화'}
           </button>
+        )}
+        {isUltimateOrAbove && fightablePets.length > 0 && (
+          <div className="col-span-2 space-y-2">
+            <button
+              onClick={() => setShowFightSelect(prev => !prev)}
+              disabled={!!actionLoading}
+              className="w-full pixel-btn font-mono text-red-400 border-red-700 hover:border-red-400 disabled:opacity-40 py-2"
+            >
+              {actionLoading === 'fight' ? '싸우는 중...' : '⚔️ 싸움걸기'}
+            </button>
+            {showFightSelect && (
+              <div className="pixel-card p-3 space-y-2">
+                <p className="text-gray-400 font-mono text-xs">상대를 선택하세요:</p>
+                {fightablePets.map(rel => (
+                  <button
+                    key={rel.id}
+                    onClick={() => rel.otherPet && callFight(rel.otherPet.id)}
+                    disabled={!!actionLoading}
+                    className="w-full text-left px-3 py-2 font-mono text-xs text-gray-300 border border-gray-700 hover:border-red-500 hover:text-red-400 rounded disabled:opacity-40"
+                  >
+                    {REL_ICONS[rel.type]} {rel.otherPet?.name} ({STAGE_LABELS[rel.otherPet?.stage ?? ''] ?? rel.otherPet?.stage})
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

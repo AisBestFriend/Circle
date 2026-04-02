@@ -33,12 +33,12 @@ export async function POST(
     return NextResponse.json({ error: 'Pet not found' }, { status: 404 })
   }
 
-  const updates = calcTick(pet)
-  console.log('[tick] pet:', id, 'stage:', pet.stage, '→', updates.stage, 'last_tick_at:', updates.last_tick_at)
+  const { randomEvent, ...petUpdates } = calcTick(pet)
+  console.log('[tick] pet:', id, 'stage:', pet.stage, '→', petUpdates.stage, 'last_tick_at:', petUpdates.last_tick_at)
 
   const { data: updated, error } = await supabaseAdmin
     .from('pets')
-    .update(updates)
+    .update(petUpdates)
     .eq('id', id)
     .select()
     .single()
@@ -48,5 +48,13 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ pet: updated })
+  if (randomEvent) {
+    await supabaseAdmin.from('pet_events').insert({
+      pet_id: id,
+      event_type: randomEvent.event_type,
+      description: randomEvent.description,
+    })
+  }
+
+  return NextResponse.json({ pet: updated, event: randomEvent?.description ?? null })
 }

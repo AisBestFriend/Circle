@@ -214,18 +214,21 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
 
   async function sendLetter() {
     if (!myPet || !letterModal?.letterType || actionLoading) return
-    setActionLoading(`letter-${letterModal.targetPetId}`)
+    const targetPetId = letterModal.targetPetId
+    const letterType = letterModal.letterType
+    setActionLoading(`letter-${targetPetId}`)
     setActionMsg('')
     setLetterModal(null)
     try {
       const res = await fetch(`/api/pets/${myPet.id}/letter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetPetId: letterModal.targetPetId, letterType: letterModal.letterType }),
+        body: JSON.stringify({ targetPetId, letterType }),
       })
       const data = await res.json()
       if (res.ok) {
         setActionMsg(data.event ?? '💌 편지를 보냈어요!')
+        router.refresh()
       } else {
         setActionMsg(data.error ?? '오류가 발생했습니다')
       }

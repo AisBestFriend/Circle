@@ -185,15 +185,43 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
     }
   }
 
-  async function callLetter(targetPetId: string) {
-    if (!myPet || actionLoading) return
-    setActionLoading(`letter-${targetPetId}`)
+  const [letterModal, setLetterModal] = useState<{
+    targetPetId: string
+    targetPetName: string
+    step: 'select' | 'preview'
+    letterType: string | null
+    previewContent: string | null
+    loading: boolean
+  } | null>(null)
+
+  function openLetterModal(targetPetId: string, targetPetName: string) {
+    setLetterModal({ targetPetId, targetPetName, step: 'select', letterType: null, previewContent: null, loading: false })
+  }
+
+  async function previewLetter(letterType: string) {
+    if (!myPet || !letterModal) return
+    setLetterModal(prev => prev ? { ...prev, loading: true, letterType } : null)
+    try {
+      const res = await fetch(
+        `/api/pets/${myPet.id}/letter?targetPetId=${letterModal.targetPetId}&letterType=${letterType}`
+      )
+      const data = await res.json()
+      setLetterModal(prev => prev ? { ...prev, step: 'preview', previewContent: data.content, loading: false } : null)
+    } catch {
+      setLetterModal(prev => prev ? { ...prev, loading: false } : null)
+    }
+  }
+
+  async function sendLetter() {
+    if (!myPet || !letterModal?.letterType || actionLoading) return
+    setActionLoading(`letter-${letterModal.targetPetId}`)
     setActionMsg('')
+    setLetterModal(null)
     try {
       const res = await fetch(`/api/pets/${myPet.id}/letter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetPetId, message: '안녕!' }),
+        body: JSON.stringify({ targetPetId: letterModal.targetPetId, letterType: letterModal.letterType }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -208,8 +236,69 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
     }
   }
 
+  const LETTER_TYPES_CONFIG = [
+    { key: 'mock', label: '조롱하기', emoji: '😈' },
+    { key: 'apologize', label: '사과하기', emoji: '🙏' },
+    { key: 'love', label: '사랑을 속삭임', emoji: '💕' },
+    { key: 'encourage', label: '격려하기', emoji: '🌟' },
+  ]
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+      {/* 편지 작성 모달 */}
+      {letterModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-gray-900 border-2 border-pink-700 rounded-lg p-5 w-full max-w-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-pink-400 font-mono text-sm font-bold">
+                💌 {letterModal.targetPetName}에게 편지
+              </h3>
+              <button onClick={() => setLetterModal(null)} className="text-gray-500 font-mono text-xs hover:text-white">[닫기]</button>
+            </div>
+
+            {letterModal.step === 'select' && (
+              <div className="space-y-2">
+                <p className="text-gray-400 font-mono text-xs">편지 내용을 선택하세요:</p>
+                {LETTER_TYPES_CONFIG.map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => previewLetter(t.key)}
+                    disabled={letterModal.loading}
+                    className="w-full text-left px-3 py-2.5 font-mono text-sm text-gray-300 border border-gray-700 hover:border-pink-500 hover:text-pink-300 rounded disabled:opacity-40"
+                  >
+                    {t.emoji} {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {letterModal.step === 'preview' && letterModal.previewContent && (
+              <div className="space-y-3">
+                <p className="text-gray-500 font-mono text-xs">미리보기:</p>
+                <pre className="text-gray-300 font-mono text-xs whitespace-pre-wrap leading-relaxed bg-gray-800 p-3 rounded border border-gray-700 max-h-48 overflow-y-auto">
+                  {letterModal.previewContent}
+                </pre>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setLetterModal(prev => prev ? { ...prev, step: 'select', previewContent: null } : null)}
+                    className="flex-1 pixel-btn font-mono text-gray-400 border-gray-600 py-1.5 text-xs"
+                  >
+                    다시 선택
+                  </button>
+                  <button
+                    onClick={sendLetter}
+                    disabled={!!actionLoading}
+                    className="flex-1 pixel-btn font-mono text-pink-400 border-pink-700 hover:border-pink-400 disabled:opacity-40 py-1.5 text-xs"
+                  >
+                    {actionLoading ? '...' : '💌 발송'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <BattleResultModal
         open={!!battleResult}
         story={battleResult?.story ?? ''}
@@ -309,7 +398,7 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
                 onRemove={() => removeFriend(f.friendshipId)}
                 removing={actionLoading === f.friendshipId}
                 onFight={(petId, pet) => callFight(petId, pet)}
-                onLetter={callLetter}
+                onLetter={(targetPetId) => openLetterModal(targetPetId, f.pet?.name ?? '???')}
                 actionLoading={actionLoading}
               />
             ))}

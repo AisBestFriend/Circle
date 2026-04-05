@@ -29,11 +29,21 @@ interface PetEvent {
   created_at: string
 }
 
+interface PendingLetter {
+  id: string
+  from_pet_id: string
+  fromPetName: string
+  letter_type: 'mock' | 'apologize' | 'love' | 'encourage'
+  content: string
+  created_at: string
+}
+
 interface DashboardClientProps {
   session: Session
   initialPet: Pet | null
   initialRelationships?: RelationshipWithPet[]
   recentEvents?: PetEvent[]
+  initialPendingLetters?: PendingLetter[]
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -284,11 +294,26 @@ function WalkFootprints() {
   )
 }
 
-export function DashboardClient({ session, initialPet, initialRelationships = [], recentEvents = [] }: DashboardClientProps) {
+const LETTER_TYPE_LABELS: Record<string, { label: string; emoji: string }> = {
+  mock: { label: '조롱', emoji: '😈' },
+  apologize: { label: '사과', emoji: '🙏' },
+  love: { label: '사랑', emoji: '💕' },
+  encourage: { label: '격려', emoji: '🌟' },
+}
+
+const REACTION_OPTIONS = [
+  { key: 'grateful', label: '감사', emoji: '🙏' },
+  { key: 'angry', label: '분노', emoji: '😡' },
+  { key: 'happy', label: '행복', emoji: '😊' },
+  { key: 'love', label: '사랑', emoji: '💕' },
+]
+
+export function DashboardClient({ session, initialPet, initialRelationships = [], recentEvents = [], initialPendingLetters = [] }: DashboardClientProps) {
   const [pet, setPet] = useState<Pet | null>(initialPet)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [showFightSelect, setShowFightSelect] = useState(false)
+  const [fightCountLeft, setFightCountLeft] = useState<number | null>(null)
   const [activeAnimation, setActiveAnimation] = useState<string | null>(null)
   const [battleResult, setBattleResult] = useState<{
     story: string
@@ -298,6 +323,10 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
   const [showEvolveEffect, setShowEvolveEffect] = useState(false)
   const [evolveText, setEvolveText] = useState('')
   const [eventPopup, setEventPopup] = useState<string | null>(null)
+  const [pendingLetters, setPendingLetters] = useState<PendingLetter[]>(initialPendingLetters)
+  const [openedLetter, setOpenedLetter] = useState<PendingLetter | null>(null)
+  const [letterLoading, setLetterLoading] = useState<string | null>(null)
+  const [showStats, setShowStats] = useState(false)
   const prevStageRef = useRef<string>(initialPet?.stage ?? 'egg')
 
   function triggerAnimation(name: string, duration = 1500) {
@@ -419,6 +448,7 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
       const data = await res.json()
       if (res.ok && data.pet) {
         setPet(data.pet)
+        if (typeof data.fightCountLeft === 'number') setFightCountLeft(data.fightCountLeft)
         const story = generateBattleStory(
           data.attacker ?? { name: pet.name, strength: pet.strength, wisdom: pet.wisdom, dark: pet.dark, harmony: pet.harmony },
           data.defender ?? { name: '상대', strength: 50, wisdom: 50, dark: 50, harmony: 50 },
@@ -435,6 +465,23 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
       setMessage('네트워크 오류가 발생했습니다')
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  async function reactToLetter(letterId: string, action: 'read' | 'discard', reaction?: string) {
+    setLetterLoading(letterId)
+    try {
+      const res = await fetch(`/api/letters/${letterId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, reaction }),
+      })
+      if (res.ok) {
+        setPendingLetters(prev => prev.filter(l => l.id !== letterId))
+        setOpenedLetter(null)
+      }
+    } finally {
+      setLetterLoading(null)
     }
   }
 
@@ -561,6 +608,18 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
           <Link href="/garden" className="text-green-600 hover:text-green-300 text-xs font-mono">
             [가든]
           </Link>
+          <button
+            onClick={() => setShowStats(prev => !prev)}
+            className="text-blue-400 hover:text-blue-300 text-xs font-mono"
+          >
+            [스탯]
+          </button>
+          <button
+            onClick={() => setOpenedLetter(null)}
+            className="relative text-pink-400 hover:text-pink-300 text-xs font-mono"
+          >
+            [편지함{pendingLetters.length > 0 && <span className="ml-0.5 text-yellow-400 font-bold">{pendingLetters.length}</span>}]
+          </button>
           <ThemeToggle />
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
@@ -570,6 +629,102 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
           </button>
         </nav>
       </header>
+
+      {/* 스탯 상세 패널 */}
+      {showStats && (
+        <div className="pixel-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-blue-400 font-mono text-xs uppercase tracking-widest">── 전체 스탯 ──</h3>
+            <button onClick={() => setShowStats(false)} className="text-gray-500 font-mono text-xs hover:text-white">[닫기]</button>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+            {[
+              { label: '배고픔', value: pet.hunger, color: 'text-orange-400' },
+              { label: '행복', value: pet.happiness, color: 'text-pink-400' },
+              { label: '에너지', value: pet.energy, color: 'text-cyan-400' },
+              { label: '힘', value: pet.strength, color: 'text-red-400' },
+              { label: '지혜', value: pet.wisdom, color: 'text-blue-400' },
+              { label: '암흑', value: pet.dark, color: 'text-purple-400' },
+              { label: '조화', value: pet.harmony, color: 'text-green-400' },
+            ].map(s => (
+              <div key={s.label} className="flex items-center gap-2">
+                <span className="text-gray-400 font-mono text-xs w-10 shrink-0">{s.label}</span>
+                <div className="flex-1 h-2 bg-gray-800 rounded">
+                  <div className={`h-2 rounded bg-current ${s.color}`} style={{ width: `${s.value}%` }} />
+                </div>
+                <span className={`font-mono text-xs w-6 text-right shrink-0 ${s.color}`}>{s.value}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-gray-600 font-mono text-xs pt-1">나이: {pet.age_days}일 | 단계: {STAGE_LABELS[pet.stage] ?? pet.stage}</p>
+        </div>
+      )}
+
+      {/* 편지함 */}
+      {pendingLetters.length > 0 && (
+        <div className="pixel-card p-4 space-y-3">
+          <h3 className="text-pink-400 font-mono text-xs uppercase tracking-widest">── 받은 편지 ({pendingLetters.length}) ──</h3>
+          <div className="space-y-2">
+            {pendingLetters.map(letter => (
+              <div key={letter.id} className="border border-gray-700 rounded p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-300 font-mono text-xs">
+                    {LETTER_TYPE_LABELS[letter.letter_type]?.emoji} {letter.fromPetName}의{' '}
+                    <span className="text-yellow-400">{LETTER_TYPE_LABELS[letter.letter_type]?.label}</span> 편지
+                  </span>
+                  <span className="text-gray-600 font-mono text-xs">{formatRelativeTime(letter.created_at)}</span>
+                </div>
+
+                {openedLetter?.id === letter.id ? (
+                  <div className="space-y-3">
+                    <pre className="text-gray-300 font-mono text-xs whitespace-pre-wrap leading-relaxed bg-gray-900 p-3 rounded border border-gray-700">
+                      {letter.content}
+                    </pre>
+                    <div>
+                      <p className="text-gray-500 font-mono text-xs mb-2">반응을 선택하세요:</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {REACTION_OPTIONS.map(r => (
+                          <button
+                            key={r.key}
+                            onClick={() => reactToLetter(letter.id, 'read', r.key)}
+                            disabled={letterLoading === letter.id}
+                            className="pixel-btn font-mono text-xs disabled:opacity-40 py-1.5"
+                          >
+                            {r.emoji} {r.label}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => reactToLetter(letter.id, 'discard')}
+                        disabled={letterLoading === letter.id}
+                        className="w-full mt-2 text-gray-600 hover:text-red-400 font-mono text-xs disabled:opacity-40"
+                      >
+                        🗑️ 버리기
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setOpenedLetter(letter)}
+                      className="flex-1 pixel-btn font-mono text-pink-400 border-pink-700 hover:border-pink-400 py-1 text-xs"
+                    >
+                      📖 열람
+                    </button>
+                    <button
+                      onClick={() => reactToLetter(letter.id, 'discard')}
+                      disabled={letterLoading === letter.id}
+                      className="flex-1 pixel-btn font-mono text-gray-500 border-gray-700 hover:border-red-500 hover:text-red-400 py-1 text-xs disabled:opacity-40"
+                    >
+                      🗑️ 버리기
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Pet display */}
       <motion.div
@@ -780,7 +935,11 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
               disabled={!!actionLoading}
               className="w-full pixel-btn font-mono text-red-400 border-red-700 hover:border-red-400 disabled:opacity-40 py-2"
             >
-              {actionLoading === 'fight' ? '싸우는 중...' : '⚔️ 싸움걸기'}
+              {actionLoading === 'fight'
+                ? '싸우는 중...'
+                : fightCountLeft !== null
+                ? `⚔️ 싸움걸기 (오늘 ${fightCountLeft}회 남음)`
+                : '⚔️ 싸움걸기'}
             </button>
             {showFightSelect && (
               <div className="pixel-card p-3 space-y-2">

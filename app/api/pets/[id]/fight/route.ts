@@ -17,13 +17,25 @@ export async function POST(
 
   const { data: myPet } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, name, strength, wisdom, dark, harmony, energy, happiness')
+    .select('id, user_id, name, strength, wisdom, dark, harmony, energy, happiness, fight_count_today, fight_date')
     .eq('id', id)
     .eq('user_id', session.user.id)
     .eq('is_alive', true)
     .single()
 
   if (!myPet) return NextResponse.json({ error: 'Pet not found' }, { status: 404 })
+
+  // 하루 10회 제한 (KST 기준)
+  const seoulNow = new Date(Date.now() + 9 * 3600 * 1000)
+  const todayKST = seoulNow.toISOString().split('T')[0]
+  const currentCount = myPet.fight_date === todayKST ? (myPet.fight_count_today ?? 0) : 0
+
+  if (currentCount >= 10) {
+    return NextResponse.json(
+      { error: '오늘 싸움 횟수(10회)를 모두 사용했어요. 자정 이후 초기화됩니다.' },
+      { status: 400 }
+    )
+  }
 
   const { data: targetPet } = await supabaseAdmin
     .from('pets')
@@ -39,9 +51,13 @@ export async function POST(
 
   const won = myPet.strength >= targetPet.strength
 
-  const myUpdates = won
-    ? { strength: Math.min(100, myPet.strength + 2), happiness: Math.min(100, myPet.happiness + 10) }
-    : { energy: Math.max(0, myPet.energy - 15) }
+  const myUpdates = {
+    ...(won
+      ? { strength: Math.min(100, myPet.strength + 2), happiness: Math.min(100, myPet.happiness + 10) }
+      : { energy: Math.max(0, myPet.energy - 15) }),
+    fight_count_today: currentCount + 1,
+    fight_date: todayKST,
+  }
 
   const { data: updatedPet, error: updateError } = await supabaseAdmin
     .from('pets')
@@ -90,5 +106,13 @@ export async function POST(
   const attackerStats = { name: myPet.name, strength: myPet.strength, wisdom: myPet.wisdom, dark: myPet.dark, harmony: myPet.harmony }
   const defenderStats = { name: targetPet.name, strength: targetPet.strength, wisdom: targetPet.wisdom, dark: targetPet.dark, harmony: targetPet.harmony }
 
-  return NextResponse.json({ pet: updatedPet, won, event: description, attacker: attackerStats, defender: defenderStats })
+  return NextResponse.json({
+    pet: updatedPet,
+    won,
+    event: description,
+    attacker: attackerStats,
+    defender: defenderStats,
+    fightCountToday: currentCount + 1,
+    fightCountLeft: 10 - (currentCount + 1),
+  })
 }

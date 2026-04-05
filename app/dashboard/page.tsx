@@ -48,6 +48,27 @@ export default async function DashboardPage() {
         .limit(5)
     : { data: [] as any[] }
 
+  // Fetch pending letters for this pet
+  let pendingLetters: any[] = []
+  if (pet) {
+    const { data: letters } = await supabaseAdmin
+      .from('letters')
+      .select('id, from_pet_id, letter_type, status, created_at, content')
+      .eq('to_pet_id', pet.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+
+    if (letters && letters.length > 0) {
+      const fromPetIds = [...new Set(letters.map((l: any) => l.from_pet_id))]
+      const { data: fromPets } = await supabaseAdmin
+        .from('pets')
+        .select('id, name')
+        .in('id', fromPetIds)
+      const petMap = Object.fromEntries((fromPets ?? []).map((p: any) => [p.id, p.name]))
+      pendingLetters = letters.map((l: any) => ({ ...l, fromPetName: petMap[l.from_pet_id] ?? '???' }))
+    }
+  }
+
   return (
     <main className="min-h-screen pixel-bg text-white">
       <DashboardClient
@@ -55,6 +76,7 @@ export default async function DashboardPage() {
         initialPet={pet}
         initialRelationships={relationships}
         recentEvents={recentEvents ?? []}
+        initialPendingLetters={pendingLetters}
       />
     </main>
   )

@@ -55,25 +55,59 @@ export async function POST(
 
   if (letterError) return NextResponse.json({ error: letterError.message }, { status: 500 })
 
-  // Update relationship intensity
+  // 편지 타입별 관계 변화
+  const letterEffects: Record<string, { intensityDelta: number; type: string | null }> = {
+    mock:      { intensityDelta: 10, type: 'rival' },   // 조롱 → 라이벌 강도↑
+    apologize: { intensityDelta: 5,  type: null },       // 사과 → 강도↑, 타입 개선
+    love:      { intensityDelta: 10, type: 'love' },     // 사랑 → 사랑 관계
+    encourage: { intensityDelta: 8,  type: 'friend' },   // 격려 → 우정
+  }
+  const effect = letterEffects[letterType] ?? { intensityDelta: 5, type: null }
+
   const [firstId, secondId] =
     myPet.id < targetPet.id ? [myPet.id, targetPet.id] : [targetPet.id, myPet.id]
 
   const { data: existingRel } = await supabaseAdmin
     .from('relationships')
-    .select('id, intensity')
+    .select('id, type, intensity')
     .eq('pet_a_id', firstId)
     .eq('pet_b_id', secondId)
     .single()
 
+  // 사과: 앙숙이면 라이벌로, 라이벌이면 그대로, 그 외엔 우정으로
+  const apologyTypeMap: Record<string, string> = {
+    enemy: 'rival',
+    rival: 'rival',
+    friend: 'friend',
+    love: 'love',
+  }
+
+  const newType = effect.type
+    ?? (letterType === 'apologize' && existingRel
+      ? apologyTypeMap[existingRel.type] ?? 'friend'
+      : existingRel?.type ?? 'friend')
+
   if (existingRel) {
     await supabaseAdmin
       .from('relationships')
-      .update({ intensity: Math.min(100, existingRel.intensity + 5) })
+      .update({
+        intensity: Math.min(100, existingRel.intensity + effect.intensityDelta),
+        type: newType,
+      })
       .eq('id', existingRel.id)
+  } else {
+    await supabaseAdmin
+      .from('relationships')
+      .insert({ pet_a_id: firstId, pet_b_id: secondId, type: newType, intensity: effect.intensityDelta })
   }
 
-  const description = `${myPet.name}이(가) ${targetPet.name}에게 편지를 보냈어요 💌`
+  const letterTypeDesc: Record<string, string> = {
+    mock:      `${myPet.name}이(가) ${targetPet.name}에게 조롱 편지를 보냈어요 😈`,
+    apologize: `${myPet.name}이(가) ${targetPet.name}에게 사과 편지를 보냈어요 🙏`,
+    love:      `${myPet.name}이(가) ${targetPet.name}에게 사랑 편지를 보냈어요 💕`,
+    encourage: `${myPet.name}이(가) ${targetPet.name}에게 격려 편지를 보냈어요 🌟`,
+  }
+  const description = letterTypeDesc[letterType] ?? `${myPet.name}이(가) ${targetPet.name}에게 편지를 보냈어요 💌`
 
   await supabaseAdmin.from('pet_events').insert([
     { pet_id: myPet.id, other_pet_id: targetPet.id, event_type: 'letter', description },

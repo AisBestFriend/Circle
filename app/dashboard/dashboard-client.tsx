@@ -328,6 +328,10 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
   const [letterLoading, setLetterLoading] = useState<string | null>(null)
   const [showStats, setShowStats] = useState(false)
   const [showInbox, setShowInbox] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameLoading, setRenameLoading] = useState(false)
+  const [resetConfirm, setResetConfirm] = useState(false)
   const prevStageRef = useRef<string>(initialPet?.stage ?? 'egg')
 
   function triggerAnimation(name: string, duration = 1500) {
@@ -515,6 +519,50 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
     }
   }
 
+  async function callRename() {
+    if (!pet || renameLoading) return
+    const name = renameValue.trim()
+    if (!name) return
+    setRenameLoading(true)
+    try {
+      const res = await fetch(`/api/pets/${pet.id}/rename`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      const data = await res.json()
+      if (res.ok && data.pet) {
+        setPet(data.pet)
+        setRenameValue('')
+        setMessage(`✏️ 이름이 "${data.pet.name}"으로 변경됐어요!`)
+        setShowSettings(false)
+      } else {
+        setMessage(data.error ?? '오류가 발생했습니다')
+      }
+    } finally {
+      setRenameLoading(false)
+    }
+  }
+
+  async function callForceReset() {
+    if (!pet || actionLoading) return
+    setActionLoading('force-reset')
+    setResetConfirm(false)
+    try {
+      const res = await fetch(`/api/pets/${pet.id}/reset`, { method: 'POST' })
+      const data = await res.json()
+      if (res.ok && data.pet) {
+        setPet(data.pet)
+        setMessage('🔄 새로운 알이 생성됐어요!')
+        setShowSettings(false)
+      } else {
+        setMessage(data.error ?? '오류가 발생했습니다')
+      }
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   if (!pet) {
     return (
       <div className="max-w-md mx-auto px-4 py-8 space-y-6">
@@ -621,6 +669,12 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
           >
             [편지함{pendingLetters.length > 0 && <span className="ml-0.5 text-yellow-400 font-bold">{pendingLetters.length}</span>}]
           </button>
+          <button
+            onClick={() => { setShowSettings(prev => !prev); setShowStats(false); setShowInbox(false); setResetConfirm(false) }}
+            className={`text-xs font-mono px-1.5 py-0.5 rounded transition-colors ${showSettings ? 'bg-gray-800 text-gray-300 border border-gray-500' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            ⚙️
+          </button>
           <ThemeToggle />
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
@@ -630,6 +684,71 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
           </button>
         </nav>
       </header>
+
+      {/* 설정 패널 */}
+      {showSettings && pet && (
+        <div className="pixel-card p-4 space-y-4">
+          <h3 className="text-green-600 font-mono text-xs uppercase tracking-widest">── ⚙️ 설정 ──</h3>
+
+          {/* 이름 변경 */}
+          <div className="space-y-2">
+            <p className="text-green-700 font-mono text-xs">이름 변경</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={renameValue}
+                onChange={e => setRenameValue(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && callRename()}
+                placeholder={pet.name}
+                maxLength={12}
+                className="flex-1 bg-transparent border border-green-900 focus:border-green-500 px-3 py-1.5 text-green-300 font-mono text-sm placeholder:text-green-900 focus:outline-none"
+              />
+              <button
+                onClick={callRename}
+                disabled={renameLoading || !renameValue.trim()}
+                className="pixel-btn font-mono text-green-400 border-green-700 hover:border-green-400 disabled:opacity-40 px-3 py-1.5 text-sm"
+              >
+                {renameLoading ? '...' : '변경'}
+              </button>
+            </div>
+          </div>
+
+          {/* 초기화 */}
+          <div className="space-y-2 pt-2 border-t border-green-950">
+            <p className="text-green-700 font-mono text-xs">다마고치 초기화</p>
+            {!resetConfirm ? (
+              <button
+                onClick={() => setResetConfirm(true)}
+                disabled={!!actionLoading}
+                className="w-full pixel-btn font-mono text-red-500 border-red-900 hover:border-red-500 disabled:opacity-40 py-2 text-sm"
+              >
+                🔄 새 알로 초기화
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-red-400 font-mono text-xs text-center">
+                  정말 초기화할까요? 현재 {pet.name}의 모든 성장이 사라져요.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setResetConfirm(false)}
+                    className="flex-1 pixel-btn font-mono text-gray-400 border-gray-700 py-1.5 text-sm"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={callForceReset}
+                    disabled={!!actionLoading}
+                    className="flex-1 pixel-btn font-mono text-red-400 border-red-700 hover:border-red-400 disabled:opacity-40 py-1.5 text-sm"
+                  >
+                    {actionLoading === 'force-reset' ? '...' : '확인 초기화'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 스탯 상세 패널 */}
       {showStats && (

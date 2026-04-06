@@ -14,7 +14,7 @@ export async function POST(
 
   const { data: pet } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, happiness, energy, is_sleeping')
+    .select('id, user_id, happiness, hunger, energy, is_sleeping')
     .eq('id', id)
     .eq('user_id', session.user.id)
     .eq('is_alive', true)
@@ -23,6 +23,19 @@ export async function POST(
   if (!pet) return NextResponse.json({ error: 'Pet not found' }, { status: 404 })
   if (pet.is_sleeping) return NextResponse.json({ error: '자는 중이에요. 먼저 깨워주세요! 💤' }, { status: 400 })
   if (pet.energy < 10) return NextResponse.json({ error: '에너지가 부족해요. 재워서 에너지를 충전해주세요! 😴' }, { status: 400 })
+  if (pet.hunger <= 20) return NextResponse.json({ error: '배가 너무 고파서 움직일 수 없어요! 🍖 밥을 먼저 주세요.', status: 400 })
+
+  // 행복도 패널티: 행복도 20 미만 시 실패 확률
+  if (pet.happiness < 20) {
+    const failRate = ((20 - pet.happiness) / 20) * 0.8
+    if (Math.random() < failRate) {
+      await supabaseAdmin
+        .from('pets')
+        .update({ energy: Math.max(0, pet.energy - 10) })
+        .eq('id', id)
+      return NextResponse.json({ error: '기분이 안 좋아서 놀기를 거부했어요... 😞 (에너지 소모)', failed: true }, { status: 200 })
+    }
+  }
 
   const { data: updated, error } = await supabaseAdmin
     .from('pets')

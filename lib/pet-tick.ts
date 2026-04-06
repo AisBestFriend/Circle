@@ -9,6 +9,8 @@ export interface TickResult {
   hunger: number
   happiness: number
   energy: number
+  strength?: number
+  wisdom?: number
   stage: string
   stage_entered_at: string
   age_days: number
@@ -26,7 +28,7 @@ const RANDOM_TICK_EVENTS: Array<RandomTickEvent & { hungerDelta: number; happine
   { description: '왠지 힘이 넘치는 날이에요 💪', event_type: 'random', hungerDelta: 0, happinessDelta: 0, energyDelta: 10 },
 ]
 
-export function calcTick(pet: Pet & { last_tick_at?: string | null; ultimate_at?: string | null; elder_at?: string | null; is_sleeping?: boolean; sleep_started_at?: string | null }): TickResult {
+export function calcTick(pet: Pet & { last_tick_at?: string | null; ultimate_at?: string | null; elder_at?: string | null; is_sleeping?: boolean; sleep_started_at?: string | null; last_strength_trained_at?: string | null; last_wisdom_trained_at?: string | null }): TickResult {
   const now = new Date()
   const lastTick = pet.last_tick_at ? new Date(pet.last_tick_at) : new Date(pet.born_at)
   const elapsedSeconds = (now.getTime() - lastTick.getTime()) / 1000
@@ -42,6 +44,37 @@ export function calcTick(pet: Pet & { last_tick_at?: string | null; ultimate_at?
     energy = Math.min(100, Math.round(pet.energy + minutes * 10))
   } else {
     energy = Math.max(0, Math.round(pet.energy - 4 * hours))
+  }
+
+  // 스탯 자연 감소: 12시간 이상 훈련 없으면 1시간마다 5씩 감소 (최소 5)
+  const DECAY_THRESHOLD_MS = 12 * 3600 * 1000
+  const DECAY_PER_HOUR = 5
+  let strength = pet.strength
+  let wisdom = pet.wisdom
+
+  if (pet.last_strength_trained_at) {
+    const trainedAgo = now.getTime() - new Date(pet.last_strength_trained_at).getTime()
+    if (trainedAgo > DECAY_THRESHOLD_MS) {
+      // How long into the decay period was the last tick?
+      const lastTickMs = lastTick.getTime()
+      const lastTrainedMs = new Date(pet.last_strength_trained_at).getTime()
+      const decayStartMs = lastTrainedMs + DECAY_THRESHOLD_MS
+      const decayFrom = Math.max(lastTickMs, decayStartMs)
+      const decayHours = Math.max(0, (now.getTime() - decayFrom) / 3600000)
+      strength = Math.max(5, Math.round(pet.strength - decayHours * DECAY_PER_HOUR))
+    }
+  }
+
+  if (pet.last_wisdom_trained_at) {
+    const trainedAgo = now.getTime() - new Date(pet.last_wisdom_trained_at).getTime()
+    if (trainedAgo > DECAY_THRESHOLD_MS) {
+      const lastTickMs = lastTick.getTime()
+      const lastTrainedMs = new Date(pet.last_wisdom_trained_at).getTime()
+      const decayStartMs = lastTrainedMs + DECAY_THRESHOLD_MS
+      const decayFrom = Math.max(lastTickMs, decayStartMs)
+      const decayHours = Math.max(0, (now.getTime() - decayFrom) / 3600000)
+      wisdom = Math.max(5, Math.round(pet.wisdom - decayHours * DECAY_PER_HOUR))
+    }
   }
 
   // Growth check
@@ -105,6 +138,8 @@ export function calcTick(pet: Pet & { last_tick_at?: string | null; ultimate_at?
     hunger,
     happiness,
     energy,
+    strength,
+    wisdom,
     stage,
     stage_entered_at,
     age_days,

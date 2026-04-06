@@ -30,6 +30,7 @@ export async function POST(
   if (!pet) return NextResponse.json({ error: 'Pet not found' }, { status: 404 })
   if (pet.is_sleeping) return NextResponse.json({ error: '자는 중이에요. 먼저 깨워주세요! 💤' }, { status: 400 })
   if (pet.energy < 10) return NextResponse.json({ error: '에너지가 부족해요. 재워서 에너지를 충전해주세요! 😴' }, { status: 400 })
+  if (pet.hunger <= 20) return NextResponse.json({ error: '배가 너무 고파서 움직일 수 없어요! 🍖 밥을 먼저 주세요.', status: 400 })
 
   let happinessDelta = 15
   let hungerDelta = -10

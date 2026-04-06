@@ -17,7 +17,7 @@ export async function POST(
 
   const { data: myPet } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, name, strength, wisdom, dark, harmony, energy, happiness, fight_count_today, fight_date, is_sleeping')
+    .select('id, user_id, name, strength, wisdom, dark, harmony, energy, happiness, hunger, fight_count_today, fight_date, is_sleeping')
     .eq('id', id)
     .eq('user_id', session.user.id)
     .eq('is_alive', true)
@@ -26,6 +26,7 @@ export async function POST(
   if (!myPet) return NextResponse.json({ error: 'Pet not found' }, { status: 404 })
   if (myPet.is_sleeping) return NextResponse.json({ error: '자는 중이에요. 먼저 깨워주세요! 💤' }, { status: 400 })
   if (myPet.energy < 20) return NextResponse.json({ error: '에너지가 부족해요. 재워서 에너지를 충전해주세요! 😴' }, { status: 400 })
+  if (myPet.hunger <= 20) return NextResponse.json({ error: '배가 너무 고파서 싸울 수 없어요! 🍖 밥을 먼저 주세요.', status: 400 })
 
   // 하루 10회 제한 (KST 기준)
   const seoulNow = new Date(Date.now() + 9 * 3600 * 1000)
@@ -55,10 +56,14 @@ export async function POST(
   const sneakAttack = targetPet.is_sleeping === true
   const targetMultiplier = sneakAttack ? 0.9 : 1.0
 
+  // 행복도 패널티: 행복도 20 미만 시 내 전투 스탯 -30%
+  const myHappinessPenalty = myPet.happiness < 20 ? 0.7 : 1.0
+
   // 종합 전투력: 힘40% + 지혜30% + 암흑20% + 조화10% + 약간의 랜덤(±5)
-  const myPower = myPet.strength * 0.4 + myPet.wisdom * 0.3 + myPet.dark * 0.2 + myPet.harmony * 0.1 + (Math.random() * 10 - 5)
+  const myPower = (myPet.strength * 0.4 + myPet.wisdom * 0.3 + myPet.dark * 0.2 + myPet.harmony * 0.1 + (Math.random() * 10 - 5)) * myHappinessPenalty
   const targetPower = (targetPet.strength * 0.4 + targetPet.wisdom * 0.3 + targetPet.dark * 0.2 + targetPet.harmony * 0.1 + (Math.random() * 10 - 5)) * targetMultiplier
   const won = myPower >= targetPower
+  const sadPenaltyApplied = myPet.happiness < 20
 
   const myUpdates = {
     ...(won
@@ -120,6 +125,7 @@ export async function POST(
     pet: updatedPet,
     won,
     sneakAttack,
+    sadPenaltyApplied,
     event: description,
     attacker: attackerStats,
     defender: defenderStats,

@@ -27,6 +27,8 @@ export interface Pet {
   final_choice_required: boolean
   is_sleeping: boolean
   sleep_started_at: string | null
+  last_strength_trained_at: string | null
+  last_wisdom_trained_at: string | null
 }
 
 export interface Relationship {

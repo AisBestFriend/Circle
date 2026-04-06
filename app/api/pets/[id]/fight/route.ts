@@ -41,7 +41,7 @@ export async function POST(
 
   const { data: targetPet } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, name, strength, wisdom, dark, harmony')
+    .select('id, user_id, name, strength, wisdom, dark, harmony, is_sleeping')
     .eq('id', targetPetId)
     .eq('is_alive', true)
     .single()
@@ -51,9 +51,13 @@ export async function POST(
     return NextResponse.json({ error: 'Cannot fight your own pet' }, { status: 400 })
   }
 
+  // 급습: 자는 상대는 모든 스탯 -10%
+  const sneakAttack = targetPet.is_sleeping === true
+  const targetMultiplier = sneakAttack ? 0.9 : 1.0
+
   // 종합 전투력: 힘40% + 지혜30% + 암흑20% + 조화10% + 약간의 랜덤(±5)
   const myPower = myPet.strength * 0.4 + myPet.wisdom * 0.3 + myPet.dark * 0.2 + myPet.harmony * 0.1 + (Math.random() * 10 - 5)
-  const targetPower = targetPet.strength * 0.4 + targetPet.wisdom * 0.3 + targetPet.dark * 0.2 + targetPet.harmony * 0.1 + (Math.random() * 10 - 5)
+  const targetPower = (targetPet.strength * 0.4 + targetPet.wisdom * 0.3 + targetPet.dark * 0.2 + targetPet.harmony * 0.1 + (Math.random() * 10 - 5)) * targetMultiplier
   const won = myPower >= targetPower
 
   const myUpdates = {
@@ -99,9 +103,10 @@ export async function POST(
       .insert({ pet_a_id: firstId, pet_b_id: secondId, type: 'rival', intensity: intensityIncrease })
   }
 
+  const sneakPrefix = sneakAttack ? `자고 있던 ${targetPet.name}을(를) 급습했다!! ` : ''
   const description = won
-    ? `${myPet.name}이(가) ${targetPet.name}와(과) 싸워서 이겼어요! ⚔️`
-    : `${myPet.name}이(가) ${targetPet.name}와(과) 싸워서 졌어요... ⚔️`
+    ? `${sneakPrefix}${myPet.name}이(가) ${targetPet.name}와(과) 싸워서 이겼어요! ⚔️`
+    : `${sneakPrefix}${myPet.name}이(가) ${targetPet.name}와(과) 싸워서 졌어요... ⚔️`
 
   await supabaseAdmin.from('pet_events').insert([
     { pet_id: myPet.id, other_pet_id: targetPet.id, event_type: 'fight', description },
@@ -114,6 +119,7 @@ export async function POST(
   return NextResponse.json({
     pet: updatedPet,
     won,
+    sneakAttack,
     event: description,
     attacker: attackerStats,
     defender: defenderStats,

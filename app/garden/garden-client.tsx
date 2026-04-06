@@ -172,7 +172,10 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
       const data = await res.json()
       if (res.ok) {
         if (typeof data.fightCountLeft === 'number') setFightCountLeft(data.fightCountLeft)
-        const story = generateBattleStory(myPet, targetPet, data.won)
+        const baseStory = generateBattleStory(myPet, targetPet, data.won)
+        const story = data.sneakAttack
+          ? `자고 있던 ${targetPet.name}을(를) 급습했다!!\n${baseStory}`
+          : baseStory
         const statChanges = data.won
           ? [{ label: '힘', change: 2 }, { label: '행복', change: 10 }]
           : [{ label: '에너지', change: -15 }]

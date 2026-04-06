@@ -148,6 +148,38 @@ html.light .pixel-card:hover {
   border-color: #a0845c;
 }
 
+html.light .pixel-btn {
+  background-color: #e8e0d0;
+  border-color: #c8b89a;
+  color: #3a2e1a;
+}
+
+html.light .pixel-btn:hover {
+  background-color: #f0e8d8;
+}
+
+/* Light mode: improve text visibility for hardcoded Tailwind colors */
+html.light .text-white { color: #1a1408 !important; }
+html.light .text-gray-100 { color: #2a2010 !important; }
+html.light .text-gray-200 { color: #2a2010 !important; }
+html.light .text-gray-300 { color: #3a3020 !important; }
+html.light .text-gray-400 { color: #4a4030 !important; }
+html.light .text-gray-500 { color: #5a5040 !important; }
+html.light .text-gray-600 { color: #6a6050 !important; }
+html.light .text-gray-800 { color: #80706a !important; }
+html.light .text-gray-950 { color: #9a8a80 !important; }
+html.light .text-green-300 { color: #1a5c2a !important; }
+html.light .text-green-400 { color: #1a5020 !important; }
+html.light .text-green-600 { color: #1a4020 !important; }
+html.light .text-green-700 { color: #1a3818 !important; }
+html.light .text-green-800 { color: #1a3015 !important; }
+html.light .text-green-900 { color: #1a2810 !important; }
+html.light .bg-gray-800 { background-color: #e0d8c8 !important; }
+html.light .bg-gray-900 { background-color: #d8d0c0 !important; }
+html.light .bg-gray-950 { background-color: #f0e8d8 !important; }
+html.light .border-gray-700 { border-color: #b8a888 !important; }
+html.light .border-gray-800 { border-color: #c8b898 !important; }
+
 /* Pixel art rendering */
 .pixel-art {
   image-rendering: pixelated;

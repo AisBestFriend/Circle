@@ -607,7 +607,7 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
         </h1>
         <nav className="flex items-center gap-3">
           <Link href="/garden" className="text-green-600 hover:text-green-300 text-xs font-mono">
-            [가든]
+            [소셜]
           </Link>
           <button
             onClick={() => { setShowStats(prev => !prev); setShowInbox(false) }}

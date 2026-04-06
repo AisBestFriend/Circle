@@ -92,7 +92,7 @@ export default async function GardenPage() {
     }))
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white">
+    <main className="min-h-screen pixel-bg">
       <GardenClient
         session={session}
         acceptedFriends={acceptedFriends as any}

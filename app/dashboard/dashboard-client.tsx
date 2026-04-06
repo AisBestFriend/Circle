@@ -653,34 +653,38 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
         >
           CIRCLE
         </h1>
-        <nav className="flex items-center gap-3">
-          <Link href="/garden" className="text-green-600 hover:text-green-300 text-xs font-mono">
-            [소셜]
+        <nav className="flex items-center gap-1.5 flex-nowrap">
+          <Link href="/garden" className="text-green-600 hover:text-green-300 text-xs font-mono px-1.5 py-0.5">
+            👥
           </Link>
           <button
-            onClick={() => { setShowStats(prev => !prev); setShowInbox(false) }}
+            onClick={() => { setShowStats(prev => !prev); setShowInbox(false); setShowSettings(false) }}
             className={`text-xs font-mono px-1.5 py-0.5 rounded transition-colors ${showStats ? 'bg-blue-900 text-blue-300 border border-blue-500' : 'text-blue-400 hover:text-blue-300'}`}
+            title="스탯"
           >
-            [스탯]
+            📊
           </button>
           <button
-            onClick={() => { setShowInbox(prev => !prev); setShowStats(false); setOpenedLetter(null) }}
+            onClick={() => { setShowInbox(prev => !prev); setShowStats(false); setShowSettings(false); setOpenedLetter(null) }}
             className={`relative text-xs font-mono px-1.5 py-0.5 rounded transition-colors ${showInbox ? 'bg-pink-900 text-pink-300 border border-pink-500' : 'text-pink-400 hover:text-pink-300'}`}
+            title="편지함"
           >
-            [편지함{pendingLetters.length > 0 && <span className="ml-0.5 text-yellow-400 font-bold">{pendingLetters.length}</span>}]
+            💌{pendingLetters.length > 0 && <span className="ml-0.5 text-yellow-400 font-bold text-xs">{pendingLetters.length}</span>}
           </button>
           <button
             onClick={() => { setShowSettings(prev => !prev); setShowStats(false); setShowInbox(false); setResetConfirm(false) }}
             className={`text-xs font-mono px-1.5 py-0.5 rounded transition-colors ${showSettings ? 'bg-gray-800 text-gray-300 border border-gray-500' : 'text-gray-500 hover:text-gray-300'}`}
+            title="설정"
           >
             ⚙️
           </button>
           <ThemeToggle />
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
-            className="text-green-700 hover:text-green-400 text-xs font-mono"
+            className="text-green-800 hover:text-green-500 text-xs font-mono px-1"
+            title="로그아웃"
           >
-            [로그아웃]
+            ↩
           </button>
         </nav>
       </header>

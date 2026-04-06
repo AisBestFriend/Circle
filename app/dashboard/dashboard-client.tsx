@@ -881,34 +881,49 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
       )}
 
       {/* Actions */}
+      {pet.is_sleeping ? (
+        /* 자는 중 UI */
+        <div className="pixel-card p-6 text-center space-y-4">
+          <div className="text-5xl animate-bounce">💤</div>
+          <p className="text-cyan-400 font-mono text-sm">{pet.name}이(가) 자고 있어요...</p>
+          <p className="text-gray-500 font-mono text-xs">분당 에너지 10% 회복 중</p>
+          <button
+            onClick={() => callPetAction('sleep')}
+            disabled={!!actionLoading}
+            className="w-full pixel-btn font-mono text-yellow-400 border-yellow-700 hover:border-yellow-400 disabled:opacity-40 py-2"
+          >
+            {actionLoading === 'sleep' ? '...' : '🌅 깨우기'}
+          </button>
+        </div>
+      ) : (
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => callPetAction('feed')}
-          disabled={!!actionLoading}
+          disabled={!!actionLoading || pet.energy < 5}
           className="pixel-btn font-mono text-orange-400 border-orange-700 hover:border-orange-400 disabled:opacity-40 py-2"
         >
-          {actionLoading === 'feed' ? '...' : '🍖 먹이기'}
+          {actionLoading === 'feed' ? '...' : `🍖 먹이기 (-5⚡)`}
         </button>
         <button
           onClick={() => callPetAction('play')}
-          disabled={!!actionLoading}
+          disabled={!!actionLoading || pet.energy < 10}
           className="pixel-btn font-mono text-pink-400 border-pink-700 hover:border-pink-400 disabled:opacity-40 py-2"
         >
-          {actionLoading === 'play' ? '...' : '🎮 놀아주기'}
+          {actionLoading === 'play' ? '...' : `🎮 놀아주기 (-10⚡)`}
         </button>
         <button
           onClick={() => callTrain('strength')}
-          disabled={!!actionLoading}
+          disabled={!!actionLoading || pet.energy < 15}
           className="pixel-btn font-mono text-red-400 border-red-700 hover:border-red-400 disabled:opacity-40 py-2"
         >
-          {actionLoading === 'train-strength' ? '...' : '🏋️ 근력훈련'}
+          {actionLoading === 'train-strength' ? '...' : `🏋️ 근력훈련 (-15⚡)`}
         </button>
         <button
           onClick={() => callTrain('wisdom')}
-          disabled={!!actionLoading}
+          disabled={!!actionLoading || pet.energy < 15}
           className="pixel-btn font-mono text-blue-400 border-blue-700 hover:border-blue-400 disabled:opacity-40 py-2"
         >
-          {actionLoading === 'train-wisdom' ? '...' : '🧘 명상'}
+          {actionLoading === 'train-wisdom' ? '...' : `🧘 명상 (-15⚡)`}
         </button>
         <button
           onClick={() => callPetAction('sleep')}
@@ -919,10 +934,10 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
         </button>
         <button
           onClick={() => callPetAction('walk')}
-          disabled={!!actionLoading}
+          disabled={!!actionLoading || pet.energy < 10}
           className="pixel-btn font-mono text-green-400 border-green-700 hover:border-green-400 disabled:opacity-40 py-2"
         >
-          {actionLoading === 'walk' ? '...' : '🚶 산책'}
+          {actionLoading === 'walk' ? '...' : `🚶 산책 (-10⚡)`}
         </button>
         {pet.stage === 'adult' && (
           <button
@@ -964,6 +979,7 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }

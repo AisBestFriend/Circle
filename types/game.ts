@@ -25,6 +25,8 @@ export interface Pet {
   ultimate_at: string | null
   elder_at: string | null
   final_choice_required: boolean
+  is_sleeping: boolean
+  sleep_started_at: string | null
 }
 
 export interface Relationship {

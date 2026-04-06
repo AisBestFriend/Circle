@@ -21,13 +21,15 @@ export async function POST(
 
   const { data: pet } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, name, happiness, hunger, energy')
+    .select('id, user_id, name, happiness, hunger, energy, is_sleeping')
     .eq('id', id)
     .eq('user_id', session.user.id)
     .eq('is_alive', true)
     .single()
 
   if (!pet) return NextResponse.json({ error: 'Pet not found' }, { status: 404 })
+  if (pet.is_sleeping) return NextResponse.json({ error: '자는 중이에요. 먼저 깨워주세요! 💤' }, { status: 400 })
+  if (pet.energy < 10) return NextResponse.json({ error: '에너지가 부족해요. 재워서 에너지를 충전해주세요! 😴' }, { status: 400 })
 
   let happinessDelta = 15
   let hungerDelta = -10

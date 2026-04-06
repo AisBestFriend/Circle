@@ -26,16 +26,23 @@ const RANDOM_TICK_EVENTS: Array<RandomTickEvent & { hungerDelta: number; happine
   { description: '왠지 힘이 넘치는 날이에요 💪', event_type: 'random', hungerDelta: 0, happinessDelta: 0, energyDelta: 10 },
 ]
 
-export function calcTick(pet: Pet & { last_tick_at?: string | null; ultimate_at?: string | null; elder_at?: string | null }): TickResult {
+export function calcTick(pet: Pet & { last_tick_at?: string | null; ultimate_at?: string | null; elder_at?: string | null; is_sleeping?: boolean; sleep_started_at?: string | null }): TickResult {
   const now = new Date()
   const lastTick = pet.last_tick_at ? new Date(pet.last_tick_at) : new Date(pet.born_at)
   const elapsedSeconds = (now.getTime() - lastTick.getTime()) / 1000
   const hours = elapsedSeconds / 3600
+  const minutes = elapsedSeconds / 60
 
-  // Stat decay
+  // Stat decay (자는 중이면 에너지 감소 없음, 오히려 회복)
   let hunger = Math.max(0, Math.round(pet.hunger - 5 * hours))
   let happiness = Math.max(0, Math.round(pet.happiness - 3 * hours))
-  let energy = Math.max(0, Math.round(pet.energy - 4 * hours))
+  let energy: number
+  if (pet.is_sleeping) {
+    // 자는 중: 분당 10% 회복
+    energy = Math.min(100, Math.round(pet.energy + minutes * 10))
+  } else {
+    energy = Math.max(0, Math.round(pet.energy - 4 * hours))
+  }
 
   // Growth check
   let stage = pet.stage

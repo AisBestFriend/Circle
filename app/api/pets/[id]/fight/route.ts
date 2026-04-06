@@ -17,13 +17,15 @@ export async function POST(
 
   const { data: myPet } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, name, strength, wisdom, dark, harmony, energy, happiness, fight_count_today, fight_date')
+    .select('id, user_id, name, strength, wisdom, dark, harmony, energy, happiness, fight_count_today, fight_date, is_sleeping')
     .eq('id', id)
     .eq('user_id', session.user.id)
     .eq('is_alive', true)
     .single()
 
   if (!myPet) return NextResponse.json({ error: 'Pet not found' }, { status: 404 })
+  if (myPet.is_sleeping) return NextResponse.json({ error: '자는 중이에요. 먼저 깨워주세요! 💤' }, { status: 400 })
+  if (myPet.energy < 20) return NextResponse.json({ error: '에너지가 부족해요. 재워서 에너지를 충전해주세요! 😴' }, { status: 400 })
 
   // 하루 10회 제한 (KST 기준)
   const seoulNow = new Date(Date.now() + 9 * 3600 * 1000)
@@ -49,7 +51,10 @@ export async function POST(
     return NextResponse.json({ error: 'Cannot fight your own pet' }, { status: 400 })
   }
 
-  const won = myPet.strength >= targetPet.strength
+  // 종합 전투력: 힘40% + 지혜30% + 암흑20% + 조화10% + 약간의 랜덤(±5)
+  const myPower = myPet.strength * 0.4 + myPet.wisdom * 0.3 + myPet.dark * 0.2 + myPet.harmony * 0.1 + (Math.random() * 10 - 5)
+  const targetPower = targetPet.strength * 0.4 + targetPet.wisdom * 0.3 + targetPet.dark * 0.2 + targetPet.harmony * 0.1 + (Math.random() * 10 - 5)
+  const won = myPower >= targetPower
 
   const myUpdates = {
     ...(won

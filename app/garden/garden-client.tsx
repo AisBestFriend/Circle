@@ -185,123 +185,9 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
     }
   }
 
-  const [letterModal, setLetterModal] = useState<{
-    targetPetId: string
-    targetPetName: string
-    step: 'select' | 'preview'
-    letterType: string | null
-    previewContent: string | null
-    loading: boolean
-  } | null>(null)
-
-  function openLetterModal(targetPetId: string, targetPetName: string) {
-    setLetterModal({ targetPetId, targetPetName, step: 'select', letterType: null, previewContent: null, loading: false })
-  }
-
-  async function previewLetter(letterType: string) {
-    if (!myPet || !letterModal) return
-    setLetterModal(prev => prev ? { ...prev, loading: true, letterType } : null)
-    try {
-      const res = await fetch(
-        `/api/pets/${myPet.id}/letter?targetPetId=${letterModal.targetPetId}&letterType=${letterType}`
-      )
-      const data = await res.json()
-      setLetterModal(prev => prev ? { ...prev, step: 'preview', previewContent: data.content, loading: false } : null)
-    } catch {
-      setLetterModal(prev => prev ? { ...prev, loading: false } : null)
-    }
-  }
-
-  async function sendLetter() {
-    if (!myPet || !letterModal?.letterType || actionLoading) return
-    const targetPetId = letterModal.targetPetId
-    const letterType = letterModal.letterType
-    setActionLoading(`letter-${targetPetId}`)
-    setActionMsg('')
-    setLetterModal(null)
-    try {
-      const res = await fetch(`/api/pets/${myPet.id}/letter`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetPetId, letterType }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setActionMsg(data.event ?? '💌 편지를 보냈어요!')
-        router.refresh()
-      } else {
-        setActionMsg(data.error ?? '오류가 발생했습니다')
-      }
-    } catch {
-      setActionMsg('네트워크 오류가 발생했습니다')
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const LETTER_TYPES_CONFIG = [
-    { key: 'mock', label: '조롱하기', emoji: '😈' },
-    { key: 'apologize', label: '사과하기', emoji: '🙏' },
-    { key: 'love', label: '사랑을 속삭임', emoji: '💕' },
-    { key: 'encourage', label: '격려하기', emoji: '🌟' },
-  ]
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-      {/* 편지 작성 모달 */}
-      {letterModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="bg-gray-900 border-2 border-pink-700 rounded-lg p-5 w-full max-w-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-pink-400 font-mono text-sm font-bold">
-                💌 {letterModal.targetPetName}에게 편지
-              </h3>
-              <button onClick={() => setLetterModal(null)} className="text-gray-500 font-mono text-xs hover:text-white">[닫기]</button>
-            </div>
-
-            {letterModal.step === 'select' && (
-              <div className="space-y-2">
-                <p className="text-gray-400 font-mono text-xs">편지 내용을 선택하세요:</p>
-                {LETTER_TYPES_CONFIG.map(t => (
-                  <button
-                    key={t.key}
-                    onClick={() => previewLetter(t.key)}
-                    disabled={letterModal.loading}
-                    className="w-full text-left px-3 py-2.5 font-mono text-sm text-gray-300 border border-gray-700 hover:border-pink-500 hover:text-pink-300 rounded disabled:opacity-40"
-                  >
-                    {t.emoji} {t.label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {letterModal.step === 'preview' && letterModal.previewContent && (
-              <div className="space-y-3">
-                <p className="text-gray-500 font-mono text-xs">미리보기:</p>
-                <pre className="text-gray-300 font-mono text-xs whitespace-pre-wrap leading-relaxed bg-gray-800 p-3 rounded border border-gray-700 max-h-48 overflow-y-auto">
-                  {letterModal.previewContent}
-                </pre>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setLetterModal(prev => prev ? { ...prev, step: 'select', previewContent: null } : null)}
-                    className="flex-1 pixel-btn font-mono text-gray-400 border-gray-600 py-1.5 text-xs"
-                  >
-                    다시 선택
-                  </button>
-                  <button
-                    onClick={sendLetter}
-                    disabled={!!actionLoading}
-                    className="flex-1 pixel-btn font-mono text-pink-400 border-pink-700 hover:border-pink-400 disabled:opacity-40 py-1.5 text-xs"
-                  >
-                    {actionLoading ? '...' : '💌 발송'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       <BattleResultModal
         open={!!battleResult}
         story={battleResult?.story ?? ''}
@@ -401,7 +287,9 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
                 onRemove={() => removeFriend(f.friendshipId)}
                 removing={actionLoading === f.friendshipId}
                 onFight={(petId, pet) => callFight(petId, pet)}
-                onLetter={(targetPetId) => openLetterModal(targetPetId, f.pet?.name ?? '???')}
+                onLetter={() => {}}
+                myPetId={myPet?.id ?? null}
+                onLetterSent={() => { setActionMsg('💌 편지를 보냈어요!'); router.refresh() }}
                 actionLoading={actionLoading}
               />
             ))}
@@ -432,24 +320,76 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
   )
 }
 
+const LETTER_TYPES_CONFIG = [
+  { key: 'mock', label: '조롱하기', emoji: '😈' },
+  { key: 'apologize', label: '사과하기', emoji: '🙏' },
+  { key: 'love', label: '사랑을 속삭임', emoji: '💕' },
+  { key: 'encourage', label: '격려하기', emoji: '🌟' },
+]
+
 function FriendCard({
   entry,
   myPet,
+  myPetId,
   onRemove,
   removing,
   onFight,
   onLetter,
+  onLetterSent,
   actionLoading,
 }: {
   entry: FriendEntry
   myPet: Pet | null
+  myPetId: string | null
   onRemove: () => void
   removing: boolean
   onFight: (targetPetId: string, pet: Pet) => void
   onLetter: (targetPetId: string) => void
+  onLetterSent: () => void
   actionLoading: string | null
 }) {
+  const [letterStep, setLetterStep] = useState<null | 'select' | 'preview'>(null)
+  const [selectedType, setSelectedType] = useState<string | null>(null)
+  const [previewContent, setPreviewContent] = useState<string | null>(null)
+  const [letterLoading, setLetterLoading] = useState(false)
+
   const rel = entry.relationship
+
+  async function handleTypeSelect(type: string) {
+    if (!myPetId || !entry.pet) return
+    setSelectedType(type)
+    setLetterLoading(true)
+    try {
+      const res = await fetch(
+        `/api/pets/${myPetId}/letter?targetPetId=${entry.pet.id}&letterType=${type}`
+      )
+      const data = await res.json()
+      setPreviewContent(data.content)
+      setLetterStep('preview')
+    } finally {
+      setLetterLoading(false)
+    }
+  }
+
+  async function handleSend() {
+    if (!myPetId || !entry.pet || !selectedType) return
+    setLetterLoading(true)
+    try {
+      const res = await fetch(`/api/pets/${myPetId}/letter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetPetId: entry.pet.id, letterType: selectedType }),
+      })
+      if (res.ok) {
+        setLetterStep(null)
+        setSelectedType(null)
+        setPreviewContent(null)
+        onLetterSent()
+      }
+    } finally {
+      setLetterLoading(false)
+    }
+  }
 
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 space-y-3">
@@ -497,22 +437,69 @@ function FriendCard({
                   style={{ width: `${rel.intensity}%` }}
                 />
               </div>
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => onFight(entry.pet!.id, entry.pet!)}
-                  disabled={!!actionLoading}
-                  className="flex-1 pixel-btn font-mono text-red-400 border-red-700 hover:border-red-400 disabled:opacity-40 py-1.5 text-xs"
-                >
-                  {actionLoading === `fight-${entry.pet.id}` ? '...' : '⚔️ 싸움걸기'}
-                </button>
-                <button
-                  onClick={() => onLetter(entry.pet!.id)}
-                  disabled={!!actionLoading}
-                  className="flex-1 pixel-btn font-mono text-pink-400 border-pink-700 hover:border-pink-400 disabled:opacity-40 py-1.5 text-xs"
-                >
-                  {actionLoading === `letter-${entry.pet.id}` ? '...' : '💌 편지보내기'}
-                </button>
-              </div>
+
+              {/* 편지 UI */}
+              {letterStep === null && (
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => onFight(entry.pet!.id, entry.pet!)}
+                    disabled={!!actionLoading}
+                    className="flex-1 pixel-btn font-mono text-red-400 border-red-700 hover:border-red-400 disabled:opacity-40 py-1.5 text-xs"
+                  >
+                    {actionLoading === `fight-${entry.pet.id}` ? '...' : '⚔️ 싸움걸기'}
+                  </button>
+                  <button
+                    onClick={() => setLetterStep('select')}
+                    disabled={!!actionLoading || letterLoading}
+                    className="flex-1 pixel-btn font-mono text-pink-400 border-pink-700 hover:border-pink-400 disabled:opacity-40 py-1.5 text-xs"
+                  >
+                    💌 편지보내기
+                  </button>
+                </div>
+              )}
+
+              {letterStep === 'select' && (
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-pink-400 font-mono text-xs">편지 종류를 선택하세요:</p>
+                    <button onClick={() => setLetterStep(null)} className="text-gray-600 font-mono text-xs hover:text-white">✕</button>
+                  </div>
+                  {LETTER_TYPES_CONFIG.map(t => (
+                    <button
+                      key={t.key}
+                      onClick={() => handleTypeSelect(t.key)}
+                      disabled={letterLoading}
+                      className="w-full text-left px-3 py-2 font-mono text-xs text-gray-300 border border-gray-700 hover:border-pink-500 hover:text-pink-300 rounded disabled:opacity-40"
+                    >
+                      {letterLoading ? '...' : `${t.emoji} ${t.label}`}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {letterStep === 'preview' && previewContent && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-pink-400 font-mono text-xs">미리보기:</p>
+                  <pre className="text-gray-300 font-mono text-xs whitespace-pre-wrap leading-relaxed bg-gray-800 p-3 rounded border border-gray-700 max-h-40 overflow-y-auto">
+                    {previewContent}
+                  </pre>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setLetterStep('select'); setPreviewContent(null) }}
+                      className="flex-1 pixel-btn font-mono text-gray-400 border-gray-600 py-1.5 text-xs"
+                    >
+                      다시 선택
+                    </button>
+                    <button
+                      onClick={handleSend}
+                      disabled={letterLoading}
+                      className="flex-1 pixel-btn font-mono text-pink-400 border-pink-700 hover:border-pink-400 disabled:opacity-40 py-1.5 text-xs"
+                    >
+                      {letterLoading ? '...' : '💌 발송'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

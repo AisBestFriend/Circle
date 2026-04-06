@@ -91,6 +91,7 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
     won: boolean
     statChanges: { label: string; change: number }[]
   } | null>(null)
+  const [fightCountLeft, setFightCountLeft] = useState<number | null>(null)
 
   async function sendInvite(e: React.FormEvent) {
     e.preventDefault()
@@ -170,6 +171,7 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
       })
       const data = await res.json()
       if (res.ok) {
+        if (typeof data.fightCountLeft === 'number') setFightCountLeft(data.fightCountLeft)
         const story = generateBattleStory(myPet, targetPet, data.won)
         const statChanges = data.won
           ? [{ label: '힘', change: 2 }, { label: '행복', change: 10 }]
@@ -233,6 +235,13 @@ export function GardenClient({ session, acceptedFriends, pendingReceived, myPet,
       {actionMsg && (
         <div className="bg-gray-900 border border-yellow-700 rounded-lg px-4 py-2">
           <p className="text-yellow-400 text-xs font-mono">{actionMsg}</p>
+        </div>
+      )}
+
+      {/* 싸움 횟수 */}
+      {fightCountLeft !== null && (
+        <div className="bg-gray-900 border border-red-900 rounded-lg px-4 py-2">
+          <p className="text-red-400 text-xs font-mono">⚔️ 오늘 싸움 남은 횟수: {fightCountLeft}회</p>
         </div>
       )}
 

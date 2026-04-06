@@ -327,6 +327,7 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
   const [openedLetter, setOpenedLetter] = useState<PendingLetter | null>(null)
   const [letterLoading, setLetterLoading] = useState<string | null>(null)
   const [showStats, setShowStats] = useState(false)
+  const [showInbox, setShowInbox] = useState(false)
   const prevStageRef = useRef<string>(initialPet?.stage ?? 'egg')
 
   function triggerAnimation(name: string, duration = 1500) {
@@ -609,14 +610,14 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
             [가든]
           </Link>
           <button
-            onClick={() => setShowStats(prev => !prev)}
-            className="text-blue-400 hover:text-blue-300 text-xs font-mono"
+            onClick={() => { setShowStats(prev => !prev); setShowInbox(false) }}
+            className={`text-xs font-mono px-1.5 py-0.5 rounded transition-colors ${showStats ? 'bg-blue-900 text-blue-300 border border-blue-500' : 'text-blue-400 hover:text-blue-300'}`}
           >
             [스탯]
           </button>
           <button
-            onClick={() => setOpenedLetter(null)}
-            className="relative text-pink-400 hover:text-pink-300 text-xs font-mono"
+            onClick={() => { setShowInbox(prev => !prev); setShowStats(false); setOpenedLetter(null) }}
+            className={`relative text-xs font-mono px-1.5 py-0.5 rounded transition-colors ${showInbox ? 'bg-pink-900 text-pink-300 border border-pink-500' : 'text-pink-400 hover:text-pink-300'}`}
           >
             [편지함{pendingLetters.length > 0 && <span className="ml-0.5 text-yellow-400 font-bold">{pendingLetters.length}</span>}]
           </button>
@@ -661,7 +662,11 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
       )}
 
       {/* 편지함 */}
-      {pendingLetters.length > 0 && (
+      {showInbox && (pendingLetters.length === 0 ? (
+        <div className="pixel-card p-4">
+          <p className="text-gray-500 font-mono text-xs text-center">받은 편지가 없어요 💌</p>
+        </div>
+      ) : (
         <div className="pixel-card p-4 space-y-3">
           <h3 className="text-pink-400 font-mono text-xs uppercase tracking-widest">── 받은 편지 ({pendingLetters.length}) ──</h3>
           <div className="space-y-2">
@@ -724,7 +729,7 @@ export function DashboardClient({ session, initialPet, initialRelationships = []
             ))}
           </div>
         </div>
-      )}
+      ))}
 
       {/* Pet display */}
       <motion.div

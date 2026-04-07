@@ -17,7 +17,7 @@ export async function POST(
 
   const { data: myPet } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, name, strength, wisdom, dark, harmony, energy, happiness, hunger, fight_count_today, fight_date, is_sleeping')
+    .select('id, user_id, name, strength, wisdom, dark, harmony, energy, happiness, hunger, fight_charges, fight_charges_updated_at, is_sleeping')
     .eq('id', id)
     .eq('user_id', session.user.id)
     .eq('is_alive', true)
@@ -28,21 +28,28 @@ export async function POST(
   if (myPet.energy < 20) return NextResponse.json({ error: '에너지가 부족해요. 재워서 에너지를 충전해주세요! 😴' }, { status: 400 })
   if (myPet.hunger <= 20) return NextResponse.json({ error: '배가 너무 고파서 싸울 수 없어요! 🍖 밥을 먼저 주세요.', status: 400 })
 
-  // 하루 10회 제한 (KST 기준)
-  const seoulNow = new Date(Date.now() + 9 * 3600 * 1000)
-  const todayKST = seoulNow.toISOString().split('T')[0]
-  const currentCount = myPet.fight_date === todayKST ? (myPet.fight_count_today ?? 0) : 0
+  // 전투권 충전 계산 (30분마다 1회, 최대 10)
+  const MAX_CHARGES = 10
+  const RECHARGE_MS = 30 * 60 * 1000
+  const now = Date.now()
+  const lastUpdated = myPet.fight_charges_updated_at ? new Date(myPet.fight_charges_updated_at).getTime() : now
+  const currentCharges = myPet.fight_charges ?? MAX_CHARGES
+  const elapsed = now - lastUpdated
+  const recharged = Math.min(MAX_CHARGES - currentCharges, Math.floor(elapsed / RECHARGE_MS))
+  const availableCharges = currentCharges + recharged
 
-  if (currentCount >= 10) {
+  if (availableCharges <= 0) {
+    const msUntilNext = RECHARGE_MS - (elapsed % RECHARGE_MS)
+    const minsLeft = Math.ceil(msUntilNext / 60000)
     return NextResponse.json(
-      { error: '오늘 싸움 횟수(10회)를 모두 사용했어요. 자정 이후 초기화됩니다.' },
+      { error: `⚡ 전투권이 없어요. ${minsLeft}분 후 충전돼요!` },
       { status: 400 }
     )
   }
 
   const { data: targetPet } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, name, strength, wisdom, dark, harmony, is_sleeping')
+    .select('id, user_id, name, stage, evolution_type, strength, wisdom, dark, harmony, is_sleeping')
     .eq('id', targetPetId)
     .eq('is_alive', true)
     .single()
@@ -52,25 +59,53 @@ export async function POST(
     return NextResponse.json({ error: 'Cannot fight your own pet' }, { status: 400 })
   }
 
-  // 급습: 자는 상대는 모든 스탯 -10%
+  // 급습: 자는 상대는 힘 -10%
   const sneakAttack = targetPet.is_sleeping === true
-  const targetMultiplier = sneakAttack ? 0.9 : 1.0
 
-  // 행복도 패널티: 행복도 20 미만 시 내 전투 스탯 -30%
-  const myHappinessPenalty = myPet.happiness < 20 ? 0.7 : 1.0
-
-  // 종합 전투력: 힘40% + 지혜30% + 암흑20% + 조화10% + 약간의 랜덤(±5)
-  const myPower = (myPet.strength * 0.4 + myPet.wisdom * 0.3 + myPet.dark * 0.2 + myPet.harmony * 0.1 + (Math.random() * 10 - 5)) * myHappinessPenalty
-  const targetPower = (targetPet.strength * 0.4 + targetPet.wisdom * 0.3 + targetPet.dark * 0.2 + targetPet.harmony * 0.1 + (Math.random() * 10 - 5)) * targetMultiplier
-  const won = myPower >= targetPower
+  // 행복도 패널티: 행복도 20 미만 시 내 힘 -30%
   const sadPenaltyApplied = myPet.happiness < 20
+  const myHappinessPenalty = sadPenaltyApplied ? 0.7 : 1.0
+
+  // ── 새 전투 계산 ──────────────────────────────
+  let myStr = (myPet.strength ?? 0) * myHappinessPenalty
+  let targetStr = (targetPet.strength ?? 0) * (sneakAttack ? 0.9 : 1.0)
+
+  // 1. 암흑(dark): 확률 발동 시 상대 힘 절반
+  const darkCapped = Math.min(myPet.dark ?? 0, 150)
+  const darkChance = 50 + (darkCapped / 150) * 20  // 50~70%
+  const darkTriggered = Math.random() * 100 < darkChance
+  if (darkTriggered) targetStr *= 0.5
+
+  // 2. 지혜(wisdom): 확률 발동 시 내 힘 2배
+  const wisdomCapped = Math.min(myPet.wisdom ?? 0, 150)
+  const wisdomChance = 50 + (wisdomCapped / 150) * 20  // 50~70%
+  const wisdomTriggered = Math.random() * 100 < wisdomChance
+  if (wisdomTriggered) myStr *= 2
+
+  // 3. 조화(harmony): 상대가 더 강하면 차이의 30~45% 보정
+  const harmonyCapped = Math.min(myPet.harmony ?? 0, 150)
+  const harmonyRate = (30 + (harmonyCapped / 150) * 15) / 100  // 0.30~0.45
+  const harmonyApplied = targetStr > myStr
+  if (harmonyApplied) myStr += (targetStr - myStr) * harmonyRate
+
+  // 4. 랜덤 ±5
+  const myPower = myStr + (Math.random() * 10 - 5)
+  const targetPower = targetStr + (Math.random() * 10 - 5)
+  const won = myPower >= targetPower
+
+  const newCharges = availableCharges - 1
+  // If recharged some, update the timestamp to reflect partial usage
+  const newUpdatedAt = recharged > 0
+    ? new Date(lastUpdated + recharged * RECHARGE_MS).toISOString()
+    : myPet.fight_charges_updated_at
 
   const myUpdates = {
     ...(won
       ? { strength: Math.min(100, myPet.strength + 2), happiness: Math.min(100, myPet.happiness + 10) }
       : { energy: Math.max(0, myPet.energy - 15) }),
-    fight_count_today: currentCount + 1,
-    fight_date: todayKST,
+    fight_charges: newCharges,
+    fight_charges_updated_at: newUpdatedAt,
+    last_active_at: new Date().toISOString(),
   }
 
   const { data: updatedPet, error: updateError } = await supabaseAdmin
@@ -113,23 +148,24 @@ export async function POST(
     ? `${sneakPrefix}${myPet.name}이(가) ${targetPet.name}와(과) 싸워서 이겼어요! ⚔️`
     : `${sneakPrefix}${myPet.name}이(가) ${targetPet.name}와(과) 싸워서 졌어요... ⚔️`
 
-  await supabaseAdmin.from('pet_events').insert([
-    { pet_id: myPet.id, other_pet_id: targetPet.id, event_type: 'fight', description },
-    { pet_id: targetPet.id, other_pet_id: myPet.id, event_type: 'fight', description },
-  ])
+  await supabaseAdmin.from('pet_events').insert(
+    { pet_id: myPet.id, other_pet_id: targetPet.id, event_type: 'fight', description }
+  )
 
   const attackerStats = { name: myPet.name, strength: myPet.strength, wisdom: myPet.wisdom, dark: myPet.dark, harmony: myPet.harmony }
-  const defenderStats = { name: targetPet.name, strength: targetPet.strength, wisdom: targetPet.wisdom, dark: targetPet.dark, harmony: targetPet.harmony }
+  const defenderStats = { name: targetPet.name, stage: targetPet.stage, evolution_type: targetPet.evolution_type ?? null, strength: targetPet.strength, wisdom: targetPet.wisdom, dark: targetPet.dark, harmony: targetPet.harmony }
 
   return NextResponse.json({
     pet: updatedPet,
     won,
     sneakAttack,
     sadPenaltyApplied,
+    wisdomTriggered,
+    darkTriggered,
+    harmonyApplied,
     event: description,
     attacker: attackerStats,
     defender: defenderStats,
-    fightCountToday: currentCount + 1,
-    fightCountLeft: 10 - (currentCount + 1),
+    fightChargesLeft: newCharges,
   })
 }

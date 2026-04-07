@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
+import { getStatCap } from '@/lib/stat-cap'
 
 export async function POST(
   _request: Request,
@@ -14,16 +15,17 @@ export async function POST(
 
   const { data: pet } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, happiness, hunger, energy, is_sleeping')
+    .select('id, user_id, stage, happiness, hunger, energy, is_sleeping')
     .eq('id', id)
     .eq('user_id', session.user.id)
     .eq('is_alive', true)
     .single()
 
   if (!pet) return NextResponse.json({ error: 'Pet not found' }, { status: 404 })
-  if (pet.is_sleeping) return NextResponse.json({ error: '자는 중이에요. 먼저 깨워주세요! 💤' }, { status: 400 })
   if (pet.energy < 10) return NextResponse.json({ error: '에너지가 부족해요. 재워서 에너지를 충전해주세요! 😴' }, { status: 400 })
   if (pet.hunger <= 20) return NextResponse.json({ error: '배가 너무 고파서 움직일 수 없어요! 🍖 밥을 먼저 주세요.', status: 400 })
+
+  const cap = getStatCap(pet.stage)
 
   // 행복도 패널티: 행복도 20 미만 시 실패 확률
   if (pet.happiness < 20) {
@@ -31,7 +33,7 @@ export async function POST(
     if (Math.random() < failRate) {
       await supabaseAdmin
         .from('pets')
-        .update({ energy: Math.max(0, pet.energy - 10) })
+        .update({ energy: Math.max(0, pet.energy - 10), last_active_at: new Date().toISOString() })
         .eq('id', id)
       return NextResponse.json({ error: '기분이 안 좋아서 놀기를 거부했어요... 😞 (에너지 소모)', failed: true }, { status: 200 })
     }
@@ -40,8 +42,10 @@ export async function POST(
   const { data: updated, error } = await supabaseAdmin
     .from('pets')
     .update({
-      happiness: Math.min(100, pet.happiness + 20),
+      happiness: Math.min(cap, pet.happiness + 20),
       energy: Math.max(0, pet.energy - 10),
+      last_active_at: new Date().toISOString(),
+      ...(pet.is_sleeping && { is_sleeping: false }),
     })
     .eq('id', id)
     .select()

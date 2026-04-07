@@ -24,7 +24,6 @@ export async function POST(
     .single()
 
   if (!myPet) return NextResponse.json({ error: 'Pet not found' }, { status: 404 })
-  if (myPet.is_sleeping) return NextResponse.json({ error: '자는 중이에요. 먼저 깨워주세요! 💤' }, { status: 400 })
   if (myPet.energy < 20) return NextResponse.json({ error: '에너지가 부족해요. 재워서 에너지를 충전해주세요! 😴' }, { status: 400 })
   if (myPet.hunger <= 20) return NextResponse.json({ error: '배가 너무 고파서 싸울 수 없어요! 🍖 밥을 먼저 주세요.', status: 400 })
 
@@ -106,6 +105,7 @@ export async function POST(
     fight_charges: newCharges,
     fight_charges_updated_at: newUpdatedAt,
     last_active_at: new Date().toISOString(),
+    ...(myPet.is_sleeping && { is_sleeping: false }),
   }
 
   const { data: updatedPet, error: updateError } = await supabaseAdmin
@@ -158,6 +158,11 @@ export async function POST(
   battleStory.push(resultLine)
 
   const description = battleStory.join(' ')
+
+  // 방어자 기상 처리
+  if (targetPet.is_sleeping) {
+    await supabaseAdmin.from('pets').update({ is_sleeping: false }).eq('id', targetPet.id)
+  }
 
   await supabaseAdmin.from('pet_events').insert(
     { pet_id: myPet.id, other_pet_id: targetPet.id, event_type: 'fight', description }

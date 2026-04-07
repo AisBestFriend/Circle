@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
+import { getStatCap } from '@/lib/stat-cap'
 
 export async function POST(
   request: Request,
@@ -19,16 +20,26 @@ export async function POST(
 
   const { data: pet } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, strength, wisdom, happiness, hunger, energy, is_sleeping')
+    .select('id, user_id, stage, strength, wisdom, happiness, hunger, energy, is_sleeping')
     .eq('id', id)
     .eq('user_id', session.user.id)
     .eq('is_alive', true)
     .single()
 
   if (!pet) return NextResponse.json({ error: 'Pet not found' }, { status: 404 })
-  if (pet.is_sleeping) return NextResponse.json({ error: '자는 중이에요. 먼저 깨워주세요! 💤' }, { status: 400 })
-  if (pet.energy < 15) return NextResponse.json({ error: '에너지가 부족해요. 재워서 에너지를 충전해주세요! 😴' }, { status: 400 })
+  const minEnergy = type === 'strength' ? 20 : 10
+  if (pet.energy < minEnergy) return NextResponse.json({ error: '에너지가 부족해요. 재워서 에너지를 충전해주세요! 😴' }, { status: 400 })
   if (pet.hunger <= 20) return NextResponse.json({ error: '배가 너무 고파서 움직일 수 없어요! 🍖 밥을 먼저 주세요.', status: 400 })
+
+  const cap = getStatCap(pet.stage)
+
+  // 이미 최대치면 에너지 소모 없이 안내
+  if (type === 'strength' && pet.strength >= cap) {
+    return NextResponse.json({ error: `💪 힘이 이미 최대치예요! (${cap})`, maxReached: true }, { status: 200 })
+  }
+  if (type === 'wisdom' && pet.wisdom >= cap) {
+    return NextResponse.json({ error: `🧘 지혜가 이미 최대치예요! (${cap})`, maxReached: true }, { status: 200 })
+  }
 
   // 행복도 패널티: 행복도 20 미만 시 실패 확률
   if (pet.happiness < 20) {
@@ -37,7 +48,7 @@ export async function POST(
       const label = type === 'strength' ? '근력훈련' : '명상'
       await supabaseAdmin
         .from('pets')
-        .update({ energy: Math.max(0, pet.energy - 15) })
+        .update({ energy: Math.max(0, pet.energy - 15), last_active_at: new Date().toISOString() })
         .eq('id', id)
       return NextResponse.json({ error: `기분이 안 좋아서 ${label}을(를) 포기했어요... 😞 (에너지 소모)`, failed: true }, { status: 200 })
     }
@@ -47,16 +58,20 @@ export async function POST(
   const updates =
     type === 'strength'
       ? {
-          strength: Math.min(100, pet.strength + 3),
-          energy: Math.max(0, pet.energy - 10),
+          strength: Math.min(cap, pet.strength + 3),
+          energy: Math.max(0, pet.energy - 20),
           happiness: Math.max(0, pet.happiness - 5),
           last_strength_trained_at: now,
+          last_active_at: now,
+          ...(pet.is_sleeping && { is_sleeping: false }),
         }
       : {
-          wisdom: Math.min(100, pet.wisdom + 3),
+          wisdom: Math.min(cap, pet.wisdom + 3),
           energy: Math.max(0, pet.energy - 5),
-          happiness: Math.min(100, pet.happiness + 5),
+          happiness: Math.min(cap, pet.happiness + 5),
           last_wisdom_trained_at: now,
+          last_active_at: now,
+          ...(pet.is_sleeping && { is_sleeping: false }),
         }
 
   const { data: updated, error } = await supabaseAdmin

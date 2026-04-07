@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getStatCap } from '@/lib/stat-cap'
+import { calcStatOutcome } from '@/lib/stat-outcome'
 
 export async function POST(
   request: Request,
@@ -55,6 +56,34 @@ export async function POST(
   }
 
   const now = new Date().toISOString()
+  const currentStat = type === 'strength' ? pet.strength : pet.wisdom
+  const outcome = calcStatOutcome(currentStat, cap)
+
+  if (outcome === 'neutral') {
+    // 에너지만 소모, 스탯 변화 없음
+    const energyCost = type === 'strength' ? 20 : 5
+    await supabaseAdmin.from('pets').update({
+      energy: Math.max(0, pet.energy - energyCost),
+      last_active_at: now,
+      ...(pet.is_sleeping && { is_sleeping: false }),
+    }).eq('id', id)
+    return NextResponse.json({ outcome: 'neutral', message: '훈련했지만 별다른 변화가 없었어요.' })
+  }
+
+  if (outcome === 'fail') {
+    // 스탯 -1 + 에너지 소모
+    const energyCost = type === 'strength' ? 20 : 5
+    const statField = type === 'strength' ? 'strength' : 'wisdom'
+    await supabaseAdmin.from('pets').update({
+      [statField]: Math.max(0, currentStat - 1),
+      energy: Math.max(0, pet.energy - energyCost),
+      last_active_at: now,
+      ...(pet.is_sleeping && { is_sleeping: false }),
+    }).eq('id', id)
+    return NextResponse.json({ outcome: 'fail', message: '무리한 훈련으로 오히려 역효과가 났어요...' })
+  }
+
+  // 성공
   const updates =
     type === 'strength'
       ? {
@@ -83,5 +112,5 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ pet: updated })
+  return NextResponse.json({ pet: updated, outcome: 'success' })
 }

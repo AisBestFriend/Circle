@@ -159,11 +159,6 @@ export async function POST(
 
   const description = battleStory.join(' ')
 
-  // 방어자 기상 처리
-  if (targetPet.is_sleeping) {
-    await supabaseAdmin.from('pets').update({ is_sleeping: false }).eq('id', targetPet.id)
-  }
-
   await supabaseAdmin.from('pet_events').insert(
     { pet_id: myPet.id, other_pet_id: targetPet.id, event_type: 'fight', description }
   )

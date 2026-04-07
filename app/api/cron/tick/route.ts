@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { getStatCap } from '@/lib/stat-cap'
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('authorization')
@@ -9,7 +10,7 @@ export async function POST(request: Request) {
 
   const { data: alivePets, error } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, name, stage, evolution_type, hunger, happiness, energy, strength, wisdom, age_days, born_at, stage_entered_at, last_tick_at, final_choice_required, is_sleeping, last_strength_trained_at, last_wisdom_trained_at')
+    .select('id, user_id, name, stage, evolution_type, hunger, happiness, energy, strength, wisdom, age_days, born_at, stage_entered_at, last_tick_at, final_choice_required, is_sleeping, last_strength_trained_at, last_wisdom_trained_at, evolution_ready_at')
     .eq('is_alive', true)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -25,10 +26,11 @@ export async function POST(request: Request) {
   const DECAY_PER_HOUR = 5
 
   for (const pet of alivePets) {
+    const cap = getStatCap(pet.stage)
     const newHunger = Math.max(0, pet.hunger - 5)
     const newHappiness = Math.max(0, pet.happiness - 3)
     const newEnergy = pet.is_sleeping
-      ? Math.min(100, pet.energy + 10) // 수면 중: 시간당 10 회복
+      ? Math.min(cap, pet.energy + 10) // 수면 중: 시간당 10 회복
       : Math.max(0, pet.energy - 4)
 
     // 스탯 자연 감소
@@ -78,6 +80,7 @@ export async function POST(request: Request) {
       // Growth logic
       let newStage = pet.stage
       let newStageEnteredAt: string | null = null
+      let evolutionReadyAt: string | null | undefined = undefined  // undefined = no change
       const avg = (pet.hunger + pet.happiness + pet.energy) / 3
 
       if (pet.stage === 'egg') {
@@ -94,9 +97,36 @@ export async function POST(request: Request) {
         }
       } else if (pet.stage === 'teen') {
         const elapsed = (now.getTime() - new Date(pet.stage_entered_at).getTime()) / 1000
+
+        // 기존 조건: 72시간 경과 + avg 70 이상
         if (elapsed >= 72 * 3600 && avg >= 70) {
           newStage = 'adult'
           newStageEnteredAt = now.toISOString()
+        } else {
+          // 신규 조건: avg 80 이상 → 다음날 KST 자정 예약
+          if (avg >= 80) {
+            if (!pet.evolution_ready_at) {
+              // 다음날 KST(UTC+9) 자정 계산
+              const kstNow = new Date(now.getTime() + 9 * 3600 * 1000)
+              const kstMidnight = new Date(Date.UTC(
+                kstNow.getUTCFullYear(),
+                kstNow.getUTCMonth(),
+                kstNow.getUTCDate() + 1,
+                -9, 0, 0, 0  // UTC 기준 KST 자정 = UTC 전날 15:00
+              ))
+              evolutionReadyAt = kstMidnight.toISOString()
+            } else if (now >= new Date(pet.evolution_ready_at)) {
+              // 자정 지남 → 완전체 진화
+              newStage = 'adult'
+              newStageEnteredAt = now.toISOString()
+              evolutionReadyAt = null
+            }
+          } else {
+            // avg 80 미달 → 예약 취소
+            if (pet.evolution_ready_at) {
+              evolutionReadyAt = null
+            }
+          }
         }
       } else if (pet.stage === 'ultimate') {
         const elapsed = (now.getTime() - new Date(pet.stage_entered_at).getTime()) / 1000
@@ -128,6 +158,7 @@ export async function POST(request: Request) {
           final_choice_required: newFinalChoiceRequired,
           last_tick_at: now.toISOString(),
           ...(newStageEnteredAt && { stage_entered_at: newStageEnteredAt }),
+          ...(evolutionReadyAt !== undefined && { evolution_ready_at: evolutionReadyAt }),
         })
         .eq('id', pet.id)
 

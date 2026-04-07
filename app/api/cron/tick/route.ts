@@ -10,7 +10,7 @@ export async function POST(request: Request) {
 
   const { data: alivePets, error } = await supabaseAdmin
     .from('pets')
-    .select('id, user_id, name, stage, evolution_type, hunger, happiness, energy, strength, wisdom, age_days, born_at, stage_entered_at, last_tick_at, final_choice_required, is_sleeping, last_strength_trained_at, last_wisdom_trained_at, evolution_ready_at')
+    .select('id, user_id, name, stage, evolution_type, hunger, happiness, energy, strength, wisdom, age_days, born_at, stage_entered_at, last_tick_at, final_choice_required, is_sleeping, last_strength_trained_at, last_wisdom_trained_at, evolution_ready_at, starvation_since')
     .eq('is_alive', true)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -58,25 +58,42 @@ export async function POST(request: Request) {
       }
     }
 
-    if (newHunger === 0 && newHappiness === 0 && newEnergy === 0) {
-      await supabaseAdmin
-        .from('pets')
-        .update({ is_alive: false, hunger: 0, happiness: 0, energy: 0 })
-        .eq('id', pet.id)
+    // 굶주림 사망 판정: hunger=0 AND energy=0 상태 5일 지속
+    let newStarvationSince: string | null | undefined = undefined
+    const isStarving = newHunger === 0 && newEnergy === 0
 
-      await supabaseAdmin.from('tombstones').insert({
-        pet_id: pet.id,
-        user_id: pet.user_id,
-        name: pet.name,
-        stage: pet.stage,
-        evolution_type: pet.evolution_type ?? null,
-        age_days: pet.age_days,
-        epitaph: '스탯이 모두 소진되어 떠났습니다...',
-        died_at: now.toISOString(),
-      })
+    if (isStarving) {
+      if (!pet.starvation_since) {
+        newStarvationSince = now.toISOString()  // 최초 진입
+      } else if (now.getTime() - new Date(pet.starvation_since).getTime() >= 5 * 24 * 3600 * 1000) {
+        // 5일 경과 → 사망
+        await supabaseAdmin
+          .from('pets')
+          .update({ is_alive: false, hunger: 0, energy: 0 })
+          .eq('id', pet.id)
 
-      died++
+        await supabaseAdmin.from('tombstones').insert({
+          pet_id: pet.id,
+          user_id: pet.user_id,
+          name: pet.name,
+          stage: pet.stage,
+          evolution_type: pet.evolution_type ?? null,
+          age_days: pet.age_days,
+          epitaph: '굶주림과 탈진으로 쓰러졌습니다...',
+          died_at: now.toISOString(),
+        })
+
+        died++
+        continue
+      }
     } else {
+      // 회복 시 starvation_since 초기화
+      if (pet.starvation_since) {
+        newStarvationSince = null
+      }
+    }
+
+    {
       // Growth logic
       let newStage = pet.stage
       let newStageEnteredAt: string | null = null
@@ -166,6 +183,7 @@ export async function POST(request: Request) {
           last_tick_at: now.toISOString(),
           ...(newStageEnteredAt && { stage_entered_at: newStageEnteredAt }),
           ...(evolutionReadyAt !== undefined && { evolution_ready_at: evolutionReadyAt }),
+          ...(newStarvationSince !== undefined && { starvation_since: newStarvationSince }),
         })
         .eq('id', pet.id)
 

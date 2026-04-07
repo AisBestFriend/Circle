@@ -90,8 +90,15 @@ export async function POST(request: Request) {
           newStageEnteredAt = now.toISOString()
         }
       } else if (pet.stage === 'baby') {
-        const elapsed = (now.getTime() - new Date(pet.stage_entered_at).getTime()) / 1000
-        if (elapsed >= 48 * 3600 && avg >= 60) {
+        // 생성 다음날 KST 03:00 이후 + avg ≥ 50
+        const bornKst = new Date(new Date(pet.born_at).getTime() + 9 * 3600 * 1000)
+        const nextDay3am = new Date(Date.UTC(
+          bornKst.getUTCFullYear(),
+          bornKst.getUTCMonth(),
+          bornKst.getUTCDate() + 1,
+          -9 + 3, 0, 0, 0  // KST 03:00 = UTC 전날 18:00
+        ))
+        if (now >= nextDay3am && avg >= 50) {
           newStage = 'teen'
           newStageEnteredAt = now.toISOString()
         }

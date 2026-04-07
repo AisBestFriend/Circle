@@ -143,10 +143,21 @@ export async function POST(
       .insert({ pet_a_id: firstId, pet_b_id: secondId, type: 'rival', intensity: intensityIncrease })
   }
 
-  const sneakPrefix = sneakAttack ? `자고 있던 ${targetPet.name}을(를) 급습했다!! ` : ''
-  const description = won
-    ? `${sneakPrefix}${myPet.name}이(가) ${targetPet.name}와(과) 싸워서 이겼어요! ⚔️`
-    : `${sneakPrefix}${myPet.name}이(가) ${targetPet.name}와(과) 싸워서 졌어요... ⚔️`
+  // 이야기식 전투 서사 생성
+  const battleStory: string[] = []
+
+  if (sneakAttack) battleStory.push(`자고 있던 ${targetPet.name}을(를) 기습했다!`)
+  if (darkTriggered) battleStory.push(`${myPet.name}의 암흑이 발동해 ${targetPet.name}의 힘을 봉쇄했다.`)
+  if (wisdomTriggered) battleStory.push(`${myPet.name}의 지혜가 빛을 발해 힘이 두 배로 솟구쳤다!`)
+  if (harmonyApplied) battleStory.push(`${myPet.name}의 조화가 열세를 극복하게 도왔다.`)
+  if (sadPenaltyApplied) battleStory.push(`배고프고 우울한 ${myPet.name}은 제 힘을 발휘하지 못했다...`)
+
+  const resultLine = won
+    ? `${myPet.name}이(가) ${targetPet.name}와(과) 싸워서 이겼어요! ⚔️`
+    : `${myPet.name}이(가) ${targetPet.name}와(과) 싸워서 졌어요... ⚔️`
+  battleStory.push(resultLine)
+
+  const description = battleStory.join(' ')
 
   await supabaseAdmin.from('pet_events').insert(
     { pet_id: myPet.id, other_pet_id: targetPet.id, event_type: 'fight', description }

@@ -97,7 +97,6 @@ export async function POST(request: Request) {
       // Growth logic
       let newStage = pet.stage
       let newStageEnteredAt: string | null = null
-      let evolutionReadyAt: string | null | undefined = undefined  // undefined = no change
       const avg = (pet.hunger + pet.happiness + pet.energy) / 3
 
       if (pet.stage === 'egg') {
@@ -107,50 +106,18 @@ export async function POST(request: Request) {
           newStageEnteredAt = now.toISOString()
         }
       } else if (pet.stage === 'baby') {
-        // 생성 다음날 KST 03:00 이후 + avg ≥ 50
-        const bornKst = new Date(new Date(pet.born_at).getTime() + 9 * 3600 * 1000)
-        const nextDay3am = new Date(Date.UTC(
-          bornKst.getUTCFullYear(),
-          bornKst.getUTCMonth(),
-          bornKst.getUTCDate() + 1,
-          -9 + 3, 0, 0, 0  // KST 03:00 = UTC 전날 18:00
-        ))
-        if (now >= nextDay3am && avg >= 50) {
+        // 유아기 1일(24h) 이상 + avg ≥ 50 → 즉시 진화
+        const elapsed = now.getTime() - new Date(pet.stage_entered_at).getTime()
+        if (elapsed >= 24 * 3600 * 1000 && avg >= 50) {
           newStage = 'teen'
           newStageEnteredAt = now.toISOString()
         }
       } else if (pet.stage === 'teen') {
-        const elapsed = (now.getTime() - new Date(pet.stage_entered_at).getTime()) / 1000
-
-        // 기존 조건: 72시간 경과 + avg 70 이상
-        if (elapsed >= 72 * 3600 && avg >= 70) {
+        // 성숙기 1일(24h) 이상 + avg ≥ 60 → 즉시 진화
+        const elapsed = now.getTime() - new Date(pet.stage_entered_at).getTime()
+        if (elapsed >= 24 * 3600 * 1000 && avg >= 60) {
           newStage = 'adult'
           newStageEnteredAt = now.toISOString()
-        } else {
-          // 신규 조건: avg 80 이상 → 다음날 KST 자정 예약
-          if (avg >= 80) {
-            if (!pet.evolution_ready_at) {
-              // 다음날 KST(UTC+9) 자정 계산
-              const kstNow = new Date(now.getTime() + 9 * 3600 * 1000)
-              const kstMidnight = new Date(Date.UTC(
-                kstNow.getUTCFullYear(),
-                kstNow.getUTCMonth(),
-                kstNow.getUTCDate() + 1,
-                -9, 0, 0, 0  // UTC 기준 KST 자정 = UTC 전날 15:00
-              ))
-              evolutionReadyAt = kstMidnight.toISOString()
-            } else if (now >= new Date(pet.evolution_ready_at)) {
-              // 자정 지남 → 완전체 진화
-              newStage = 'adult'
-              newStageEnteredAt = now.toISOString()
-              evolutionReadyAt = null
-            }
-          } else {
-            // avg 80 미달 → 예약 취소
-            if (pet.evolution_ready_at) {
-              evolutionReadyAt = null
-            }
-          }
         }
       } else if (pet.stage === 'ultimate') {
         const elapsed = (now.getTime() - new Date(pet.stage_entered_at).getTime()) / 1000
@@ -182,7 +149,6 @@ export async function POST(request: Request) {
           final_choice_required: newFinalChoiceRequired,
           last_tick_at: now.toISOString(),
           ...(newStageEnteredAt && { stage_entered_at: newStageEnteredAt }),
-          ...(evolutionReadyAt !== undefined && { evolution_ready_at: evolutionReadyAt }),
           ...(newStarvationSince !== undefined && { starvation_since: newStarvationSince }),
         })
         .eq('id', pet.id)

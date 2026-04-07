@@ -147,8 +147,8 @@ export async function POST(
   const battleStory: string[] = []
 
   if (sneakAttack) battleStory.push(`자고 있던 ${targetPet.name}을(를) 기습했다!`)
-  if (darkTriggered) battleStory.push(`${myPet.name}의 암흑이 발동해 ${targetPet.name}의 힘을 봉쇄했다.`)
-  if (wisdomTriggered) battleStory.push(`${myPet.name}의 지혜가 빛을 발해 힘이 두 배로 솟구쳤다!`)
+  if (darkTriggered) battleStory.push(`${myPet.name}의 어둠이 ${targetPet.name}의 의지를 잠식했다.`)
+  if (wisdomTriggered) battleStory.push(`${myPet.name}은 지혜로 자신의 힘을 훨씬 잘 이끌어냈다.`)
   if (harmonyApplied) battleStory.push(`${myPet.name}의 조화가 열세를 극복하게 도왔다.`)
   if (sadPenaltyApplied) battleStory.push(`배고프고 우울한 ${myPet.name}은 제 힘을 발휘하지 못했다...`)
 
